@@ -19,7 +19,7 @@ import numpy as np
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 from .util import HostSync, TextHelper
-from akari_yolo_lib.oakd_tracking_yolo import OakdTrackingYolo
+from akari_yolo_lib.oakd_tracking_yolo import OakdTrackingYolo, PosLog
 
 DISPLAY_WINDOW_SIZE_RATE = 2.0
 idColors = np.random.random(size=(256, 3)) * 256
@@ -39,8 +39,8 @@ class OakdYoloStar(OakdTrackingYolo):
         track_targets: Optional[List[Union[int, str]]] = None,
         show_bird_frame: bool = True,
         show_spatial_frame: bool = False,
-        show_orbit: bool = False,
-        log_path: Optional[str] = None,
+        show_orbit: bool = True,
+        log_path: Optional[str] = "log",
     ) -> None:
         """クラスの初期化メソッド。
 
@@ -70,8 +70,9 @@ class OakdYoloStar(OakdTrackingYolo):
             show_spatial_frame=show_spatial_frame,
             show_orbit=show_orbit,
             log_path=log_path,
-            )
-
+        )
+        self.start_time = datetime.now()
+        self.log_player = LogPlayer()
 
     def get_frame(self) -> Union[np.ndarray, List[Any], Any]:
         """フレーム画像と検出結果を取得する。
@@ -186,7 +187,6 @@ class OakdYoloStar(OakdTrackingYolo):
             if self.show_orbit:
                 self.orbit_data_list.update_orbit_data(tracklets)
         return frame, detections, tracklets
-
 
     def get_labeled_frame(
         self,
@@ -400,556 +400,64 @@ class OakdYoloStar(OakdTrackingYolo):
 
         cv2.imshow("birds", birds)
 
-    def set_spatial_frame_range(self, range: float) -> None:
-        """3次元プロットの範囲を設定する。
 
-        Args:
-            range (float):3次元プロットの描画距離[m]。
-
-        """
-        self.spatial_frame_range = range
-
-    def create_spatial_frame(self) -> None:
-        """3次元プロットを作成する。"""
-        self.fig = plt.figure()
-        self.ax = self.fig.add_subplot(111, projection="3d")
-        self.fig.show()
-        self.ax.view_init(elev=25, azim=-40, roll=0)
-
-    def draw_spatial_frame(self, tracklets: List[Any]) -> None:
-        """3次元プロットを描画する。
-
-        Args:
-            tracklets (List[Any]): トラッキング結果のリスト。
-
-        """
-        # AKARIのヘッドを描画
-        plt.cla()
-        self.ax.set_xlim(
-            [-1 * self.spatial_frame_range / 2, self.spatial_frame_range / 2]
-        )
-        self.ax.set_ylim([0, self.spatial_frame_range])
-        self.ax.set_zlim(
-            [-1 * self.spatial_frame_range / 2, self.spatial_frame_range / 2]
-        )
-        self.ax.set_xlabel("X")
-        self.ax.set_ylabel("Z")
-        self.ax.set_zlabel("Y")
-        self.ax.plot(
-            [-1 * self.spatial_frame_range / 2, self.spatial_frame_range / 2],
-            [0, 0],
-            [0, 0],
-            color="gray",
-            linestyle="--",
-        )  # x=0の基準線
-        self.ax.plot(
-            [-1 * self.spatial_frame_range / 2, -1 * self.spatial_frame_range / 2],
-            [0, self.spatial_frame_range],
-            [0, 0],
-            color="gray",
-            linestyle="--",
-        )  # x=0の基準線
-        self.ax.plot(
-            [0, 0],
-            [0, self.spatial_frame_range],
-            [-1 * self.spatial_frame_range / 2, -1 * self.spatial_frame_range / 2],
-            color="gray",
-            linestyle="--",
-        )  # x=0の基準線
-        self.ax.plot(
-            [0, 0],
-            [0, 0],
-            [-1 * self.spatial_frame_range / 2, self.spatial_frame_range / 2],
-            color="gray",
-            linestyle="--",
-        )  # y=0の基準線
-        cam_width = self.spatial_frame_range / 10.0
-        cam_height = self.spatial_frame_range / 30.0
-        cam_depth = self.spatial_frame_range / 15.0
-        vertices = np.array(
-            [
-                [0, 0, 0],
-                [cam_width, cam_depth, cam_height],
-                [-1 * cam_width, cam_depth, cam_height],
-                [-1 * cam_width, cam_depth, -1 * cam_height],
-                [cam_width, cam_depth, -1 * cam_height],
-            ]
-        )
-        pan = 0
-        tilt = 0
-        if self.robot_coordinate:
-            pan = self.joints.get_joint_positions()["pan"]
-            tilt = self.joints.get_joint_positions()["tilt"]
-            R_pan = np.array(
-                [
-                    [np.cos(pan), -np.sin(pan), 0],
-                    [np.sin(pan), np.cos(pan), 0],
-                    [0, 0, 1],
-                ]
-            )
-            R_tilt = np.array(
-                [
-                    [1, 0, 0],
-                    [0, np.cos(tilt), -np.sin(tilt)],
-                    [0, np.sin(tilt), np.cos(tilt)],
-                ]
-            )
-            rotation_matrix = np.dot(R_pan, R_tilt)
-            rotated_vertices = np.dot(vertices, rotation_matrix.T)
-
-            faces = [
-                [rotated_vertices[0], rotated_vertices[1], rotated_vertices[4]],
-                [rotated_vertices[1], rotated_vertices[2], rotated_vertices[4]],
-                [rotated_vertices[2], rotated_vertices[3], rotated_vertices[4]],
-                [rotated_vertices[3], rotated_vertices[0], rotated_vertices[4]],
-                [
-                    rotated_vertices[0],
-                    rotated_vertices[1],
-                    rotated_vertices[2],
-                    rotated_vertices[3],
-                ],
-            ]
-            self.ax.add_collection3d(
-                Poly3DCollection(
-                    faces,
-                    facecolors="black",
-                    linewidths=1,
-                    edgecolors="black",
-                    alpha=0.5,
-                )
-            )
-        if tracklets is not None:
-            for i in range(0, len(tracklets)):
-                if tracklets[i].status.name == "TRACKED":
-                    # Y軸とZ軸は表示の観点から反転
-                    x = tracklets[i].spatialCoordinates.x / 1000
-                    y = tracklets[i].spatialCoordinates.z / 1000
-                    z = tracklets[i].spatialCoordinates.y / 1000
-                    color = [
-                        idColors[tracklets[i].id][2] / 255,
-                        idColors[tracklets[i].id][1] / 255,
-                        idColors[tracklets[i].id][0] / 255,
-                    ]
-                    self.ax.scatter(x, y, z, color=color)
-        plt.pause(0.001)
-        plt.draw()
-
-
-@dataclass
-class PosLog:
-    """保存する位置情報"""
-
-    time: int
-    x: float
-    y: float
-    z: float
-
-
-class LogJson(TypedDict):
-    """保存するJSONの型"""
-
-    id: int
-    name: str
-    time: float
-    pos: List[Tuple[float, float, float]]
-
-
-class OrbitData(object):
-    """trackletsの位置情報を保存する形式を定義したクラス"""
-
-    def __init__(self, name: str, id: int, pos_log: PosLog):
-        """クラスの初期化メソッド。"""
-        self.name: str = name
-        self.id: int = id
-        self.pos_log: List[PosLog] = []
-        self.tmp_pos_log: List[PosLog] = [pos_log]
-
-
-class OrbitDataList(object):
-    """trackletsの移動履歴を保存するためのクラス"""
-
-    def __init__(self, labels: List[str], log_path: Optional[str] = None):
-        """クラスの初期化メソッド。
-
-        Args:
-            labels (List[str]): trackletsのlabel
-            log_path (Optional[str]): logを保存するディレクトリパス
-        """
-        self.LOGGING_INTEREVAL = 0.5
-        # LOGGING_INTEREVALの間にこの回数以上存在しなければ誤認識と判定
-        self.AVAILABLE_TIME_THRESHOLD = 3
-        self.start_time = time.time()
-        self.last_update_time = 0.0
-        self.data: List[OrbitData] = []
-        self.labels: List[str] = labels
-        self.file_name = None
-        if log_path is not None:
-            if not os.path.exists(log_path):
-                os.makedirs(log_path)
-            current_time = datetime.now()
-            self.file_name = (
-                log_path + f"/data_{current_time.strftime('%Y%m%d_%H%M%S')}.json"
-            )
-            init_json = {}
-            init_json["start_time"] = f"{current_time.strftime('%Y/%m/%d %H:%M:%S')}"
-            init_json["interval"] = self.LOGGING_INTEREVAL
-            init_json["logs"] = []
-            with open(self.file_name, mode="wt", encoding="utf-8") as f:
-                json.dump(init_json, f, ensure_ascii=False, indent=2)
-
-    def __del__(self):
-        """OrbitDataListオブジェクトが削除される際に呼び出されるデストラクタ。"""
-        for data in self.data:
-            self.save_pos_log(data)
-
-    def get_cur_time(self) -> float:
-        """現在の時間を取得する
-
-        Returns:
-            float: 現在の時間
-        """
-        return time.time() - self.start_time
-
-    def get_orbit_from_id(self, id: int) -> OrbitData:
-        """IDからOrbitDataを取得する
-
-        Args:
-            id (int): trackletのid
-
-        Returns:
-            OrbitData: IDに対応するOrbitData
-
-        """
-        for data in self.data:
-            if data.id == id:
-                return data
-        return None
-
-    def add_new_data(self, tracklet: Any) -> None:
-        """trackletから新しいidのOrbitDataを作成
-
-        Args:
-            tracklet (Any): 保存するtracklet
-
-        """
-        pos_data = PosLog(
-            time=self.get_cur_time(),
-            x=tracklet.spatialCoordinates.x,
-            y=tracklet.spatialCoordinates.y,
-            z=tracklet.spatialCoordinates.z,
-        )
-        self.data.append(
-            OrbitData(
-                name=self.labels[tracklet.label], id=tracklet.id, pos_log=pos_data
-            )
-        )
-
-    def add_track_data(self, tracklet: Any, pos_list: List[PosLog]) -> None:
-        """trackletの位置情報をpos_listに追加
-        Args:
-            tracklet (Any): 追加するtracklet
-            pos_list (List[PosLog]): 追加先のlist
-
-        """
-        pos_data = PosLog(
-            time=self.get_cur_time(),
-            x=tracklet.spatialCoordinates.x,
-            y=tracklet.spatialCoordinates.y,
-            z=tracklet.spatialCoordinates.z,
-        )
-        pos_list.append(pos_data)
-
-    def update_orbit_data(self, tracklets: List[Any]) -> None:
-        """trackletsの位置情報で軌道情報を更新
-
-        Args:
-            tracklets (List[Any]): tracklets
-
-        """
-        if tracklets is None:
-            return
-        for tracklet in tracklets:
-            if tracklet.status.name == "TRACKED":
-                new_data = True
-                for data in self.data:
-                    if tracklet.id == data.id:
-                        self.add_track_data(tracklet, data.tmp_pos_log)
-                        new_data = False
-                if new_data:
-                    self.add_new_data(tracklet)
-        self.fix_pos_log()
-        self.remove_old_data(tracklets)
-
-    def weighted_average_position(
-        self, pos_logs: List[PosLog], target_time: float
-    ) -> PosLog:
-        """指定された時間での位置を、重み付け平均から推測する。
-
-        Args:
-            pos_logs (List[PosLog]): 時間と位置のログのリスト。
-            target_time (float): 推測したい時間。
-
-        Returns:
-            PosLog: 推測された位置。
-        """
-        total_weight = 0.0
-        weighted_sum_x = 0.0
-        weighted_sum_y = 0.0
-        weighted_sum_z = 0.0
-        for log in pos_logs:
-            # 時間差に基づいた重みを計算（時間差が小さいほど重みが大きくなる）
-            weight = 1 / (abs(log.time - target_time) + 1e-9)  # ゼロ除算を避けるための微小値
-            total_weight += weight
-            weighted_sum_x += log.x * weight
-            weighted_sum_y += log.y * weight
-            weighted_sum_z += log.z * weight
-        # 重み付け平均を計算
-        avg_x = weighted_sum_x / total_weight
-        avg_y = weighted_sum_y / total_weight
-        avg_z = weighted_sum_z / total_weight
-
-        return PosLog(time=target_time, x=avg_x, y=avg_y, z=avg_z)
-
-    def fix_pos_log(self) -> None:
-        """tmp_pos_logに保存された位置情報をLOGGING_INTEREVALで時間平均してpos_logに保存"""
-        cur_time = self.get_cur_time()
-        while True:
-            next_time = self.last_update_time + self.LOGGING_INTEREVAL * 3 / 2
-            if cur_time - next_time < 0:
-                break
-            for data in self.data:
-                tmp_list: List[PosLog] = []
-                while True:
-                    if len(data.tmp_pos_log) > 0:
-                        if data.tmp_pos_log[0].time < next_time:
-                            tmp_list.append(data.tmp_pos_log.pop(0))
-                        else:
-                            break
-                    else:
-                        break
-                if len(tmp_list) >= self.AVAILABLE_TIME_THRESHOLD:
-                    data.pos_log.append(
-                        self.weighted_average_position(
-                            tmp_list, self.last_update_time + self.LOGGING_INTEREVAL
-                        )
-                    )
-            self.last_update_time += self.LOGGING_INTEREVAL
-
-    def remove_old_data(self, tracklets: List[Any]) -> None:
-        """trackletsから消えたデータをpos_logから削除して保存
-        Args:
-            tracklets (List[Any]): tracklets
-
-        """
-        new_data = []
-        for data in self.data:
-            is_tracking = False
-            for tracklet in tracklets:
-                if tracklet.id == data.id:
-                    is_tracking = True
-                    break
-            if not is_tracking:
-                if self.file_name is not None:
-                    self.save_pos_log(data)
-            else:
-                new_data.append(data)
-        self.data = new_data
-
-    def save_pos_log(self, data: OrbitData) -> None:
-        """OrbitDataのpos_logをファイルに保存
-
-        Args:
-            data (OrbitData): 保存するOrbitData
-
-        """
-        if len(data.pos_log) == 0:
-            return
-        new_data: LogJson = {
-            "id": data.id,
-            "name": data.name,
-            "time": data.pos_log[0].time,
-            "pos": [
-                (
-                    round(pos.x / 1000.0, 3),
-                    round(pos.y / 1000.0, 3),
-                    round(pos.z / 1000.0, 3),
-                )
-                for pos in data.pos_log
-            ],
-        }
-        json_open = open(self.file_name, "r")
-        log_file = json.load(json_open)
-        log_file["logs"].append(new_data)
-        with open(self.file_name, mode="wt", encoding="utf-8") as f:
-            json.dump(log_file, f, ensure_ascii=False, indent=2)
-
-
-class OrbitPlayer(OakdTrackingYolo):
-    """軌道ログを再生するためのクラス"""
-
+class LogPlayer(OrbitPlayer):
     def __init__(
         self,
         log_path: str,
+        duration: float = 1.0,
         speed: float = 1.0,
         fov: float = 73.0,
         max_z: float = 15000,
     ) -> None:
-        """クラスの初期化メソッド。
-        Args:
-            log_path (str): ログファイルのパス
-            speed (float, optional): 再生速度 (1.0 が等速). デフォルトは 1.0.
-            fov (float, optional): 俯瞰マップ上に描画されるOAK-Dの視野角 (度). デフォルトは 73.0 度.
-            max_z (float, optional): 俯瞰マップの最大Z座標値. デフォルトは 15000.
+        super().__init__(self, log_path, speed, fov, max_z)
+        self.duration = duration
+        self.plotting_list: List[PosLog] = []
 
-        Raises:
-            FileNotFoundError: ログファイルが存在しない場合に発生.
+    def load_log(self, log_path: str) -> None:
         """
-        self.log = None
+        ログファイルを読み込む。
+
+        Args:
+            log_path (str): ログファイルのパス。
+
+        """
         try:
             json_open = open(log_path, "r")
             self.log = json.load(json_open)
         except FileNotFoundError:
             print(f"Error: The file {log_path} does not exist.")
             return
-        self.fov = fov
-        self.speed = speed
-        self.max_z = max_z
-        self.interval = float(self.log["interval"])
-        self.end_time = self.get_end_time(self.log["logs"])
-        self.bird_eye_frame = self.create_bird_frame()
-        self.datetime = datetime.strptime(self.log["start_time"], "%Y/%m/%d %H:%M:%S")
 
-    def get_end_time(self, logs: List[Any]) -> float:
+    def get_plot_pos(datetime: datetime, pos_log:PosLog) -> Tuple[int, int]:
         """
-        ログファイル内のデータの終了時刻を取得する。
+        指定した時間の位置を取得する。
 
         Args:
-            logs (List[Any]): 軌道の時系列データ
+            datetime (datetime): 時間。
+            pos_log (PosLog): 時間と位置のログ。
 
         Returns:
-            float: ログデータの終了時刻 [s]
-        """
-        end_time = 0
-        for data in logs:
-            cur_end_time = float(data["time"]) + self.interval * len(data["pos"])
-            if cur_end_time > end_time:
-                end_time = cur_end_time
-        return end_time
+            Tuple[int, int]: 位置。
 
-    def get_cur_index(self, now: float, data: Dict[str, Any]) -> int:
-        """現在時刻からインデックス番号を取得する。
+        """
+        index = (datetime - pos_log["time"]) / self.interval / self.speed
+
+        return None
+
+    def update_plotting_list(datetime: datetime) -> List[OrbitData]:
+        """
+        指定した時間の軌道データのリストを取得する。
 
         Args:
-            now (float): 現在の時刻 (秒単位)
-            data (Dict[str, Any]): 軌道の時系列データ
+            datetime (datetime): 時間。
 
         Returns:
-            int: データの現在インデックス。
-                -2 は開始時刻前、-1 は時刻が最終インデックスを超えている、
-                それ以外の正の整数はインデックスを表す。
-        """
-        spend_time = now - float(data["time"])
-        if spend_time < 0:
-            return -2
-        if spend_time >= self.interval * len(data["pos"]):
-            return -1
-        return int(spend_time / self.interval)
-
-    def play_log(self) -> None:
-        """ログデータに基づいて、設定された時間間隔で軌跡を描画する。"""
-        plotting_list = []
-        now = 0.0
-        while now <= self.end_time:
-            # 記録開始時間に到達したらplotting_listに追加
-            for data in self.log["logs"]:
-                if data["time"] == now:
-                    plotting_list.append(copy.deepcopy(data))
-            updated_plotting_list = []
-            for plotting_data in plotting_list:
-                if self.get_cur_index(now, plotting_data) >= 0:
-                    updated_plotting_list.append(plotting_data)
-            plotting_list = copy.deepcopy(updated_plotting_list)
-            self.draw_bird_frame(now, plotting_list)
-            now += self.interval
-            self.datetime += timedelta(seconds=self.interval)
-            time.sleep(self.interval / self.speed)
-
-    def draw_bird_frame(self, now: float, log_list: List[Any]) -> None:
-        """俯瞰フレームにログを描画する。
-
-        Args:
-            datas (List[Any]): 描画中の軌道ログのリスト。
+            List[OrbitData]: 軌道データのリスト。
 
         """
-        birds = self.bird_eye_frame.copy()
-        cv2.putText(
-            birds,
-            self.datetime.strftime("%Y/%m/%d %H:%M:%S.%f")[:-4],
-            (0, birds.shape[1] - 10),
-            cv2.FONT_HERSHEY_DUPLEX,
-            0.3,
-            (255, 255, 255),
-        )
-        if log_list is not None:
-            for data in log_list:
-                cur_index = self.get_cur_index(now, data)
-                point_y = self.pos_to_point_y(
-                    birds.shape[0], data["pos"][cur_index][2] * 1000
-                )
-                point_x = self.pos_to_point_x(
-                    birds.shape[1], data["pos"][cur_index][0] * 1000
-                )
-                cv2.circle(
-                    birds,
-                    (point_x, point_y),
-                    2,
-                    idColors[data["id"]],
-                    thickness=5,
-                    lineType=8,
-                    shift=0,
-                )
-                cv2.putText(
-                    birds,
-                    data["name"],
-                    (point_x - 30, point_y - 10),
-                    cv2.FONT_HERSHEY_TRIPLEX,
-                    0.5,
-                    idColors[data["id"]],
-                )
-                prev_point = None
-                for i in range(0, cur_index):
-                    cur_point = (
-                        self.pos_to_point_x(birds.shape[1], data["pos"][i][0] * 1000),
-                        self.pos_to_point_y(birds.shape[0], data["pos"][i][2] * 1000),
-                    )
-                    cv2.circle(
-                        birds,
-                        cur_point,
-                        2,
-                        idColors[data["id"]],
-                        thickness=2,
-                        lineType=8,
-                        shift=0,
-                    )
-                    if prev_point is not None:
-                        cv2.line(
-                            birds,
-                            prev_point,
-                            cur_point,
-                            idColors[data["id"]],
-                            thickness=1,
-                        )
-                    prev_point = (
-                        self.pos_to_point_x(birds.shape[1], data["pos"][i][0] * 1000),
-                        self.pos_to_point_y(birds.shape[0], data["pos"][i][2] * 1000),
-                    )
-                if prev_point is not None:
-                    cv2.line(
-                        birds,
-                        prev_point,
-                        (point_x, point_y),
-                        idColors[data["id"]],
-                        2,
-                    )
-        cv2.imshow("birds", birds)
-        cv2.waitKey(1)
+        orbit_data_list = []
+        for orbit_data in self.log:
+            if orbit_data["datetime"] == datetime:
+                orbit_data_list.append(orbit_data)
+        return orbit_data_list
