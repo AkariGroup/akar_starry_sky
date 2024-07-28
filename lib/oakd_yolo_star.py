@@ -19,7 +19,12 @@ import numpy as np
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 from .util import HostSync, TextHelper
-from akari_yolo_lib.oakd_tracking_yolo import OakdTrackingYolo, PosLog
+from akari_yolo_lib.oakd_tracking_yolo import (
+    OakdTrackingYolo,
+    PosLog,
+    OrbitData,
+    OrbitPlayer,
+)
 
 DISPLAY_WINDOW_SIZE_RATE = 2.0
 idColors = np.random.random(size=(256, 3)) * 256
@@ -410,9 +415,20 @@ class LogPlayer(OrbitPlayer):
         fov: float = 73.0,
         max_z: float = 15000,
     ) -> None:
+        """
+        ログファイルを再生するクラス。
+
+        Args:
+            log_path (str): ログファイルのパス。
+            duration (float, optional):
+            speed (float, optional): 再生速度。デフォルトは1.0。
+            fov (float, optional): 俯瞰マップ上に描画されるOAK-Dの視野角 (度). デフォルトは 73.0 度。
+            max_z (float, optional): 俯瞰マップの最大Z座標値. デフォルトは 15000。
+        """
         super().__init__(self, log_path, speed, fov, max_z)
         self.duration = duration
         self.plotting_list: List[PosLog] = []
+        self.plotting_index = 0
 
     def load_log(self, log_path: str) -> None:
         """
@@ -429,7 +445,22 @@ class LogPlayer(OrbitPlayer):
             print(f"Error: The file {log_path} does not exist.")
             return
 
-    def get_plot_pos(datetime: datetime, pos_log:PosLog) -> Tuple[int, int]:
+    def update_plotting_list(self, cur_time: datetime) -> None:
+        updated_plotting_list = []
+        for data in self.plotting_list:
+            if self.get_cur_index(cur_time, data) >= 0:
+                updated_plotting_list.append(data)
+        while True:
+            if (self.log[self.plotting_index]["time"] - datetime).total_seconds() <= 0:
+                self.plotting_list.append(self.log[self.plotting_index])
+                self.plotting_index += 1
+            else:
+                break
+        self.plotting_list = updated_plotting_list
+
+    def get_plot_pos(
+        self, datetime: datetime, pos_log: PosLog
+    ) -> Optional[Tuple[int, int]]:
         """
         指定した時間の位置を取得する。
 
@@ -441,23 +472,32 @@ class LogPlayer(OrbitPlayer):
             Tuple[int, int]: 位置。
 
         """
-        index = (datetime - pos_log["time"]) / self.interval / self.speed
+        (decimal, index) = math.modf(
+            (datetime - pos_log["time"]) / self.interval * self.speed
+        )
+        if index >= len(pos_log["pos"]) - 1:
+            return None
+        return (
+            pos_log["pos"][index][0] * decimal
+            + pos_log["pos"][index + 1][0] * (1 - decimal),
+            pos_log["pos"][index][2] * decimal
+            + pos_log["pos"][index + 1][2] * (1 - decimal),
+        )
 
-        return None
-
-    def update_plotting_list(datetime: datetime) -> List[OrbitData]:
+    def update_plot_data(self, cur_time: datetime) -> List[Tuple[float, float]]:
         """
-        指定した時間の軌道データのリストを取得する。
+        指定した時間の位置リストを取得する。
 
         Args:
-            datetime (datetime): 時間。
+            cur_time (datetime): 時間。
 
         Returns:
-            List[OrbitData]: 軌道データのリスト。
-
+            List[Tuple[float, float]]: 位置リスト。
         """
-        orbit_data_list = []
-        for orbit_data in self.log:
-            if orbit_data["datetime"] == datetime:
-                orbit_data_list.append(orbit_data)
-        return orbit_data_list
+        self.plotting_list = self.update_plotting_list(cur_time)
+        pos_list = []
+        for data in self.plotting_list:
+            pos = self.get_plot_pos(cur_time, data)
+            if pos is not None:
+                pos_list.append(pos)
+        return pos_list
