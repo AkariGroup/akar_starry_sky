@@ -9,7 +9,7 @@ from typing import Any, List, Optional, Tuple, Union
 import cv2
 import numpy as np
 
-from akari_yolo_lib.oakd_tracking_yolo import (
+from .akari_yolo_lib.oakd_tracking_yolo import (
     OakdTrackingYolo,
     PosLog,
     OrbitPlayer,
@@ -220,7 +220,7 @@ class LogPlayer(OrbitPlayer):
             fov (float, optional): 俯瞰マップ上に描画されるOAK-Dの視野角 (度). デフォルトは 73.0 度。
             max_z (float, optional): 俯瞰マップの最大Z座標値. デフォルトは 15000。
         """
-        super().__init__(self, log_path, speed, fov, max_z)
+        super().__init__(log_path, speed, fov, max_z)
         self.duration = duration
         self.plotting_list: List[PosLog] = []
         self.plotting_index = 0
