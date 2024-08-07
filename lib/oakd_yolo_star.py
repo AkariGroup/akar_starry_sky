@@ -16,7 +16,7 @@ from .akari_yolo_lib.oakd_tracking_yolo import (
 )
 
 DISPLAY_WINDOW_SIZE_RATE = 2.0
-idColors = np.random.random(size=(256, 3)) * 256
+idColors = np.random.random(size=(512, 3)) * 256
 WHITE = (255, 255, 255)
 
 
@@ -66,8 +66,12 @@ class OakdYoloStar(OakdTrackingYolo):
             show_orbit=show_orbit,
             log_path=log_path,
         )
+        self.max_x = 15000
         self.start_time = time.time()
-        self.log_player = LogPlayer(log_path, start_time=self.start_time)
+        log_file_path = self.orbit_data_list.get_log_path()
+        self.log_player = LogPlayer(log_file_path, start_time=self.start_time)
+        self.log_player.update_bird_frame_distance(self.max_z)
+        self.log_player.update_bird_frame_width(self.max_x)
 
     def create_bird_frame(self) -> np.ndarray:
         """
@@ -78,26 +82,19 @@ class OakdYoloStar(OakdTrackingYolo):
 
         """
         fov = self.fov
-        frame = np.zeros((600, 300, 3), np.uint8)
+        frame = np.zeros((300, 600, 3), np.uint8)
         cv2.rectangle(
             frame, (0, 283), (frame.shape[1], frame.shape[0]), (70, 70, 70), -1
         )
-
-        alpha = (180 - fov) / 2
-        center = int(frame.shape[1] / 2)
-        max_p = frame.shape[0] - int(math.tan(math.radians(alpha)) * center)
-        fov_cnt = np.array(
-            [
-                (0, frame.shape[0]),
-                (frame.shape[1], frame.shape[0]),
-                (frame.shape[1], max_p),
-                (center, frame.shape[0]),
-                (0, max_p),
-                (0, frame.shape[0]),
-            ]
-        )
         # cv2.fillPoly(frame, [fov_cnt], color=(70, 70, 70))
         return frame
+
+    def update_bird_frame_width(self, distance: int) -> None:
+        """俯瞰フレームの横方向の表示最大値を変更する。
+        Args:
+            distance (int): 最大横幅[mm]。
+        """
+        self.max_x = distance
 
     def update_bird_frame_distance(self, distance: int) -> None:
         """俯瞰フレームの距離方向の表示最大値を変更する。
@@ -105,6 +102,19 @@ class OakdYoloStar(OakdTrackingYolo):
             distance (int): 最大距離[mm]。
         """
         self.max_z = distance
+
+    def pos_to_point_x(self, frame_width: int, pos_x: float) -> int:
+        """
+        3次元位置をbird frame上のx座標に変換する
+
+        Args:
+            frame_width (int): bird frameの幅
+            pos_x (float): 3次元位置のx
+
+        Returns:
+            int: bird frame上のx座標
+        """
+        return int(pos_x / self.max_x * frame_width + frame_width / 2)
 
     def draw_bird_frame(self, tracklets: List[Any], show_labels: bool = False) -> None:
         """
@@ -181,22 +191,22 @@ class OakdYoloStar(OakdTrackingYolo):
                                     idColors[tracklets[i].id],
                                     2,
                                 )
-                    self.log_player.update_plotting_list(time.time() - self.start_time)
-                    plot_logs = self.log_player.update_plot_data(
-                        time.time() - self.start_time
-                    )
-                    for plot_log in plot_logs:
-                        point_y = self.pos_to_point_y(birds.shape[0], plot_log[1])
-                        point_x = self.pos_to_point_x(birds.shape[1], plot_log[0])
-                        cv2.circle(
-                            birds,
-                            cur_point,
-                            2,
-                            WHITE,
-                            thickness=2,
-                            lineType=8,
-                            shift=0,
-                        )
+            self.log_player.update_plotting_list(time.time() - self.start_time)
+            plot_logs = self.log_player.update_plot_data(time.time() - self.start_time)
+            for plot_log in plot_logs:
+                print(f"pos: {plot_log[0], plot_log[1]}")
+                point_y = self.pos_to_point_y(birds.shape[0], plot_log[1] * 1000)
+                point_x = self.pos_to_point_x(birds.shape[1], plot_log[0] * 1000)
+                print(f"point: {point_x, point_y}")
+                cv2.circle(
+                    birds,
+                    (point_x, point_y),
+                    1,
+                    WHITE,
+                    thickness=1,
+                    lineType=8,
+                    shift=0,
+                )
         cv2.imshow("birds", birds)
 
 
@@ -205,8 +215,8 @@ class LogPlayer(OrbitPlayer):
         self,
         log_path: str,
         start_time: int = 0,
-        duration: float = 1.0,
-        speed: float = 1.0,
+        duration: float = 10.0,
+        speed: float = 0.3,
         fov: float = 73.0,
         max_z: float = 15000,
     ) -> None:
@@ -227,8 +237,31 @@ class LogPlayer(OrbitPlayer):
         self.log_path = log_path
         self.load_log(self.log_path)
         self.plot_start_time = start_time
-        self.RESTART_INTERVAL = 10 # リセットした際に再度ログをプロットし始めるまでの時間[s]
+        self.RESTART_INTERVAL = (
+            10  # リセットした際に再度ログをプロットし始めるまでの時間[s]
+        )
         self.last_reset_time = self.plot_start_time
+        self.max_x = 15000
+
+    def update_bird_frame_width(self, distance: int) -> None:
+        """俯瞰フレームの横方向の表示最大値を変更する。
+        Args:
+            distance (int): 最大横幅[mm]。
+        """
+        self.max_x = distance
+
+    def pos_to_point_x(self, frame_width: int, pos_x: float) -> int:
+        """
+        3次元位置をbird frame上のx座標に変換する
+
+        Args:
+            frame_width (int): bird frameの幅
+            pos_x (float): 3次元位置のx
+
+        Returns:
+            int: bird frame上のx座標
+        """
+        return int(pos_x / self.max_x * frame_width + frame_width / 2)
 
     def load_log(self, log_path: str) -> None:
         """
@@ -265,17 +298,21 @@ class LogPlayer(OrbitPlayer):
             if self.get_cur_index(cur_time, data) >= 0:
                 updated_plotting_list.append(data)
         while True:
-            if self.plotting_index >= len(self.log):
+            print(self.plotting_index)
+            if self.plotting_index >= len(self.log["logs"]):
                 self.reset_plotting_log(cur_time)
                 break
+            print(
+                f'time:{self.log["logs"][self.plotting_index]["time"]}, cur_time:{cur_time}, plot_start_time:{self.plot_start_time}'
+            )
             if (
-                self.log[self.plotting_index]["time"] / self.duration
+                self.log["logs"][self.plotting_index]["time"] / self.duration
                 - (cur_time - self.plot_start_time)
             ) <= 0:
                 # timeを現在時刻に更新した上でplotting_listに追加
-                new_data = copy.deepcopy(self.log[self.plotting_index])
+                new_data = copy.deepcopy(self.log["logs"][self.plotting_index])
                 new_data["time"] = cur_time
-                self.plotting_list.append(new_data)
+                updated_plotting_list.append(new_data)
 
                 self.plotting_index += 1
             else:
@@ -297,8 +334,12 @@ class LogPlayer(OrbitPlayer):
         (decimal, index) = math.modf(
             (cur_time - pos_log["time"]) / self.interval * self.speed
         )
+        index = int(index)
         if index >= len(pos_log["pos"]) - 1:
             return None
+        print(
+            f'pos0: {pos_log["pos"][index][0]}, pos1: {pos_log["pos"][index + 1][0]}, decimal: {decimal}'
+        )
         return (
             pos_log["pos"][index][0] * decimal
             + pos_log["pos"][index + 1][0] * (1 - decimal),
@@ -316,10 +357,11 @@ class LogPlayer(OrbitPlayer):
         Returns:
             List[Tuple[float, float]]: 位置リスト。
         """
-        self.plotting_list = self.update_plotting_list(cur_time)
+        self.update_plotting_list(cur_time)
         pos_list = []
-        for data in self.plotting_list:
-            pos = self.get_plot_pos(cur_time, data)
-            if pos is not None:
-                pos_list.append(pos)
+        if self.plotting_list is not None:
+            for data in self.plotting_list:
+                pos = self.get_plot_pos(cur_time, data)
+                if pos is not None:
+                    pos_list.append(pos)
         return pos_list

@@ -12,7 +12,7 @@ def main() -> None:
         "-f",
         "--fps",
         help="Camera frame fps. This should be smaller than nn inference fps",
-        default=10,
+        default=8,
         type=int,
     )
     parser.add_argument(
@@ -54,12 +54,14 @@ def main() -> None:
             fps=args.fps,
             cam_debug=args.display_camera,
             robot_coordinate=args.robot_coordinate,
+            track_targets=["person"],
             show_bird_frame=bird_frame,
             show_spatial_frame=False,
             show_orbit=True,
             log_path=args.log_path,
         )
-        oakd_yolo_star.update_bird_frame_distance(10000)
+        oakd_yolo_star.update_bird_frame_width(2000)
+        oakd_yolo_star.update_bird_frame_distance(4000)
         while True:
             frame = None
             detections = []
