@@ -82,10 +82,10 @@ class OakdYoloStar(OakdTrackingYolo):
 
         """
         fov = self.fov
-        frame = np.zeros((300, 600, 3), np.uint8)
-        cv2.rectangle(
-            frame, (0, 283), (frame.shape[1], frame.shape[0]), (70, 70, 70), -1
-        )
+        frame = np.zeros((720, 1280, 3), np.uint8)
+        # cv2.rectangle(
+        #    frame, (0, 283), (frame.shape[1], frame.shape[0]), (70, 70, 70), -1
+        # )
         # cv2.fillPoly(frame, [fov_cnt], color=(70, 70, 70))
         return frame
 
@@ -191,22 +191,20 @@ class OakdYoloStar(OakdTrackingYolo):
                                     idColors[tracklets[i].id],
                                     2,
                                 )
-            self.log_player.update_plotting_list(time.time() - self.start_time)
-            plot_logs = self.log_player.update_plot_data(time.time() - self.start_time)
-            for plot_log in plot_logs:
-                print(f"pos: {plot_log[0], plot_log[1]}")
-                point_y = self.pos_to_point_y(birds.shape[0], plot_log[1] * 1000)
-                point_x = self.pos_to_point_x(birds.shape[1], plot_log[0] * 1000)
-                print(f"point: {point_x, point_y}")
-                cv2.circle(
-                    birds,
-                    (point_x, point_y),
-                    1,
-                    WHITE,
-                    thickness=1,
-                    lineType=8,
-                    shift=0,
-                )
+        self.log_player.update_plotting_list(time.time() - self.start_time)
+        plot_logs = self.log_player.update_plot_data(time.time() - self.start_time)
+        for plot_log in plot_logs:
+            point_y = self.pos_to_point_y(birds.shape[0], plot_log[1] * 1000)
+            point_x = self.pos_to_point_x(birds.shape[1], plot_log[0] * 1000)
+            cv2.circle(
+                birds,
+                (point_x, point_y),
+                1,
+                WHITE,
+                thickness=1,
+                lineType=8,
+                shift=0,
+            )
         cv2.imshow("birds", birds)
 
 
@@ -310,10 +308,14 @@ class LogPlayer(OrbitPlayer):
                 - (cur_time - self.plot_start_time)
             ) <= 0:
                 # timeを現在時刻に更新した上でplotting_listに追加
-                new_data = copy.deepcopy(self.log["logs"][self.plotting_index])
-                new_data["time"] = cur_time
-                updated_plotting_list.append(new_data)
-
+                is_available = False
+                for data in updated_plotting_list:
+                    if data["id"] == self.log["logs"][self.plotting_index]["id"]:
+                        is_available = True
+                if not is_available:
+                    new_data = copy.deepcopy(self.log["logs"][self.plotting_index])
+                    new_data["time"] = cur_time
+                    updated_plotting_list.append(new_data)
                 self.plotting_index += 1
             else:
                 break
@@ -341,10 +343,10 @@ class LogPlayer(OrbitPlayer):
             f'pos0: {pos_log["pos"][index][0]}, pos1: {pos_log["pos"][index + 1][0]}, decimal: {decimal}'
         )
         return (
-            pos_log["pos"][index][0] * decimal
-            + pos_log["pos"][index + 1][0] * (1 - decimal),
-            pos_log["pos"][index][2] * decimal
-            + pos_log["pos"][index + 1][2] * (1 - decimal),
+            pos_log["pos"][index][0] * (1 - decimal)
+            + pos_log["pos"][index + 1][0] * decimal,
+            pos_log["pos"][index][2] * (1 - decimal)
+            + pos_log["pos"][index + 1][2] * decimal,
         )
 
     def update_plot_data(self, cur_time: int) -> List[Tuple[float, float]]:

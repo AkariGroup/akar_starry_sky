@@ -12,7 +12,7 @@ def main() -> None:
         "-f",
         "--fps",
         help="Camera frame fps. This should be smaller than nn inference fps",
-        default=8,
+        default=7,
         type=int,
     )
     parser.add_argument(
