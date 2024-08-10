@@ -4,6 +4,7 @@ import copy
 import json
 import math
 import time
+from pathlib import Path
 from typing import Any, List, Optional, Tuple, Union
 
 import cv2
@@ -72,6 +73,7 @@ class OakdYoloStar(OakdTrackingYolo):
         self.log_player = LogPlayer(log_file_path, start_time=self.start_time)
         self.log_player.update_bird_frame_distance(self.max_z)
         self.log_player.update_bird_frame_width(self.max_x)
+        self.BIRD_FRAME_BACKGROUND_IMAGE = Path(__file__) + "/../jpg/night_sky.jpg"
 
     def create_bird_frame(self) -> np.ndarray:
         """
@@ -81,8 +83,8 @@ class OakdYoloStar(OakdTrackingYolo):
             np.ndarray: 俯瞰フレーム。
 
         """
-        fov = self.fov
-        frame = np.zeros((720, 1280, 3), np.uint8)
+        frame = cv2.imread(str(self.BIRD_FRAME_BACKGROUND_IMAGE))
+        frame = cv2.resize(frame, (1920, 1080))
         # cv2.rectangle(
         #    frame, (0, 283), (frame.shape[1], frame.shape[0]), (70, 70, 70), -1
         # )
