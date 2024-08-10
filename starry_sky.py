@@ -1,32 +1,18 @@
 #!/usr/bin/env python3
 import argparse
 import cv2
-from lib.oakd_yolo_star import oakdYoloStar
-from lib.akari_yolo_lib.oakd_tracking_yolo import download_file
+from lib.oakd_yolo_star import OakdYoloStar
+from lib.akari_yolo_lib.util import download_file
 
 
 def main() -> None:
     # parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-m",
-        "--model",
-        help="Provide model name or model path for inference",
-        default="yolov7tiny_coco_416x416",
-        type=str,
-    )
-    parser.add_argument(
-        "-c",
-        "--config",
-        help="Provide config path for inference",
-        default="json/yolov7tiny_coco_416x416.json",
-        type=str,
-    )
-    parser.add_argument(
         "-f",
         "--fps",
         help="Camera frame fps. This should be smaller than nn inference fps",
-        default=10,
+        default=7,
         type=int,
     )
     parser.add_argument(
@@ -45,6 +31,7 @@ def main() -> None:
         "--log_path",
         help="Path to save orbit data",
         type=str,
+        default="log/"
     )
     args = parser.parse_args()
     bird_frame = True
@@ -61,18 +48,20 @@ def main() -> None:
     end = False
 
     while not end:
-        oakd_yolo_star = oakdYoloStar(
-            config_path=args.config,
-            model_path=args.model,
+        oakd_yolo_star = OakdYoloStar(
+            config_path="config/human_parts.json",
+            model_path="model/human_parts.blob",
             fps=args.fps,
             cam_debug=args.display_camera,
             robot_coordinate=args.robot_coordinate,
+            track_targets=["person"],
             show_bird_frame=bird_frame,
             show_spatial_frame=False,
             show_orbit=True,
             log_path=args.log_path,
         )
-        oakd_yolo_star.update_bird_frame_distance(10000)
+        oakd_yolo_star.update_bird_frame_width(2000)
+        oakd_yolo_star.update_bird_frame_distance(4000)
         while True:
             frame = None
             detections = []
