@@ -3,6 +3,7 @@
 import copy
 import json
 import math
+import os
 import time
 from pathlib import Path
 from typing import Any, List, Optional, Tuple, Union
@@ -19,6 +20,7 @@ from .akari_yolo_lib.oakd_tracking_yolo import (
 DISPLAY_WINDOW_SIZE_RATE = 2.0
 idColors = np.random.random(size=(512, 3)) * 256
 WHITE = (255, 255, 255)
+STAR_COLOR = (124, 252, 244)
 
 
 class OakdYoloStar(OakdTrackingYolo):
@@ -54,6 +56,9 @@ class OakdYoloStar(OakdTrackingYolo):
             log_path (Optional[str], optional): 物体の軌道履歴を保存するパス。show_orbitがTrueの時のみ有効。
 
         """
+        self.BIRD_FRAME_BACKGROUND_IMAGE = (
+            os.path.dirname(__file__) + "/../jpg/night_sky.jpg"
+        )
         super().__init__(
             config_path=config_path,
             model_path=model_path,
@@ -73,7 +78,6 @@ class OakdYoloStar(OakdTrackingYolo):
         self.log_player = LogPlayer(log_file_path, start_time=self.start_time)
         self.log_player.update_bird_frame_distance(self.max_z)
         self.log_player.update_bird_frame_width(self.max_x)
-        self.BIRD_FRAME_BACKGROUND_IMAGE = Path(__file__) + "/../jpg/night_sky.jpg"
 
     def create_bird_frame(self) -> np.ndarray:
         """
@@ -84,7 +88,7 @@ class OakdYoloStar(OakdTrackingYolo):
 
         """
         frame = cv2.imread(str(self.BIRD_FRAME_BACKGROUND_IMAGE))
-        frame = cv2.resize(frame, (1920, 1080))
+        frame = cv2.resize(frame, (960, 540))
         # cv2.rectangle(
         #    frame, (0, 283), (frame.shape[1], frame.shape[0]), (70, 70, 70), -1
         # )
@@ -150,7 +154,7 @@ class OakdYoloStar(OakdTrackingYolo):
                         birds,
                         (point_x, point_y),
                         2,
-                        idColors[tracklets[i].id],
+                        STAR_COLOR,
                         thickness=3,
                         lineType=8,
                         shift=0,
@@ -168,8 +172,8 @@ class OakdYoloStar(OakdTrackingYolo):
                                     birds,
                                     cur_point,
                                     2,
-                                    idColors[tracklets[i].id],
-                                    thickness=2,
+                                    STAR_COLOR,
+                                    thickness=1,
                                     lineType=8,
                                     shift=0,
                                 )
@@ -178,7 +182,7 @@ class OakdYoloStar(OakdTrackingYolo):
                                         birds,
                                         prev_point,
                                         cur_point,
-                                        idColors[tracklets[i].id],
+                                        STAR_COLOR,
                                         thickness=1,
                                     )
                                 prev_point = (
@@ -190,8 +194,8 @@ class OakdYoloStar(OakdTrackingYolo):
                                     birds,
                                     prev_point,
                                     (point_x, point_y),
-                                    idColors[tracklets[i].id],
-                                    2,
+                                    STAR_COLOR,
+                                    1,
                                 )
         self.log_player.update_plotting_list(time.time() - self.start_time)
         plot_logs = self.log_player.update_plot_data(time.time() - self.start_time)
@@ -298,7 +302,6 @@ class LogPlayer(OrbitPlayer):
             if self.get_cur_index(cur_time, data) >= 0:
                 updated_plotting_list.append(data)
         while True:
-            print(self.plotting_index)
             if self.plotting_index >= len(self.log["logs"]):
                 self.reset_plotting_log(cur_time)
                 break
