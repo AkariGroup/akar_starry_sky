@@ -197,8 +197,8 @@ class OakdYoloStar(OakdTrackingYolo):
                                     STAR_COLOR,
                                     1,
                                 )
-        self.log_player.update_plotting_list(time.time() - self.start_time)
-        plot_logs = self.log_player.update_plot_data(time.time() - self.start_time)
+        self.log_player.update_plotting_list(time.time())
+        plot_logs = self.log_player.update_plot_data(time.time())
         for plot_log in plot_logs:
             point_y = self.pos_to_point_y(birds.shape[0], plot_log[1] * 1000)
             point_x = self.pos_to_point_x(birds.shape[1], plot_log[0] * 1000)
@@ -229,6 +229,7 @@ class LogPlayer(OrbitPlayer):
 
         Args:
             log_path (str): ログファイルのパス。
+            start_time (int, optional): ログの再生開始時間。デフォルトは0。
             duration (float, optional): ログのplot追加の時間スケール。デフォルトは1.0。
             speed (float, optional): 再生速度。デフォルトは1.0。
             fov (float, optional): 俯瞰マップ上に描画されるOAK-Dの視野角 (度). デフォルトは 73.0 度。
@@ -241,12 +242,6 @@ class LogPlayer(OrbitPlayer):
         self.log_path = log_path
         self.load_log(self.log_path)
         self.plot_start_time = start_time
-        # 既存のログファイルを引き継ぐ場合、最後のログの時間を取得
-        if "logs" in self.log:
-            if len(self.log["logs"]) > 0:
-                self.plot_start_time = max(
-                    [log["time"] for log in self.log["logs"]], default=start_time
-                )
         self.RESTART_INTERVAL = (
             10  # リセットした際に再度ログをプロットし始めるまでの時間[s]
         )
@@ -303,6 +298,7 @@ class LogPlayer(OrbitPlayer):
             cur_time (int): 時間。
 
         """
+        print(f"cur_time: {cur_time}, plot_start_time: {self.plot_start_time}")
         updated_plotting_list = []
         for data in self.plotting_list:
             if self.get_cur_index(cur_time, data) >= 0:
