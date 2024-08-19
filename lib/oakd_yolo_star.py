@@ -220,7 +220,7 @@ class LogPlayer(OrbitPlayer):
         log_path: str,
         start_time: int = 0,
         duration: float = 10.0,
-        speed: float = 0.3,
+        speed: float = 0.1,
         fov: float = 73.0,
         max_z: float = 15000,
     ) -> None:
@@ -241,6 +241,12 @@ class LogPlayer(OrbitPlayer):
         self.log_path = log_path
         self.load_log(self.log_path)
         self.plot_start_time = start_time
+        # 既存のログファイルを引き継ぐ場合、最後のログの時間を取得
+        if "logs" in self.log:
+            if len(self.log["logs"]) > 0:
+                self.plot_start_time = max(
+                    [log["time"] for log in self.log["logs"]], default=start_time
+                )
         self.RESTART_INTERVAL = (
             10  # リセットした際に再度ログをプロットし始めるまでの時間[s]
         )
@@ -305,9 +311,6 @@ class LogPlayer(OrbitPlayer):
             if self.plotting_index >= len(self.log["logs"]):
                 self.reset_plotting_log(cur_time)
                 break
-            print(
-                f'time:{self.log["logs"][self.plotting_index]["time"]}, cur_time:{cur_time}, plot_start_time:{self.plot_start_time}'
-            )
             if (
                 self.log["logs"][self.plotting_index]["time"] / self.duration
                 - (cur_time - self.plot_start_time)
@@ -344,9 +347,6 @@ class LogPlayer(OrbitPlayer):
         index = int(index)
         if index >= len(pos_log["pos"]) - 1:
             return None
-        print(
-            f'pos0: {pos_log["pos"][index][0]}, pos1: {pos_log["pos"][index + 1][0]}, decimal: {decimal}'
-        )
         return (
             pos_log["pos"][index][0] * (1 - decimal)
             + pos_log["pos"][index + 1][0] * decimal,
