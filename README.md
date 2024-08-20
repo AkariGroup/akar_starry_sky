@@ -19,7 +19,7 @@ https://github.com/AkariGroup/akari_yolo_models/tree/main/human_parts
 `source venv/bin/activate`  
 を実施後、下記を実行。  
 
-`python3　starry_sky.py`  
+`python3 starry_sky.py`  
 
 引数は下記を指定可能  
 - `-f`, `--fps`: カメラ画像の取得PFS。デフォルトは7。OAK-Dの性質上、推論の処理速度を上回る入力を与えるとアプリが異常終了しやすくなるため注意。  
