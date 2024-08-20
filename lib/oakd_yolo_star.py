@@ -3,7 +3,9 @@
 import copy
 import json
 import math
+import os
 import time
+from pathlib import Path
 from typing import Any, List, Optional, Tuple, Union
 
 import cv2
@@ -18,6 +20,7 @@ from .akari_yolo_lib.oakd_tracking_yolo import (
 DISPLAY_WINDOW_SIZE_RATE = 2.0
 idColors = np.random.random(size=(512, 3)) * 256
 WHITE = (255, 255, 255)
+STAR_COLOR = (124, 252, 244)
 
 
 class OakdYoloStar(OakdTrackingYolo):
@@ -53,6 +56,9 @@ class OakdYoloStar(OakdTrackingYolo):
             log_path (Optional[str], optional): 物体の軌道履歴を保存するパス。show_orbitがTrueの時のみ有効。
 
         """
+        self.BIRD_FRAME_BACKGROUND_IMAGE = (
+            os.path.dirname(__file__) + "/../jpg/night_sky.jpg"
+        )
         super().__init__(
             config_path=config_path,
             model_path=model_path,
@@ -81,8 +87,8 @@ class OakdYoloStar(OakdTrackingYolo):
             np.ndarray: 俯瞰フレーム。
 
         """
-        fov = self.fov
-        frame = np.zeros((720, 1280, 3), np.uint8)
+        frame = cv2.imread(str(self.BIRD_FRAME_BACKGROUND_IMAGE))
+        frame = cv2.resize(frame, (960, 540))
         # cv2.rectangle(
         #    frame, (0, 283), (frame.shape[1], frame.shape[0]), (70, 70, 70), -1
         # )
@@ -148,7 +154,7 @@ class OakdYoloStar(OakdTrackingYolo):
                         birds,
                         (point_x, point_y),
                         2,
-                        idColors[tracklets[i].id],
+                        STAR_COLOR,
                         thickness=3,
                         lineType=8,
                         shift=0,
@@ -166,8 +172,8 @@ class OakdYoloStar(OakdTrackingYolo):
                                     birds,
                                     cur_point,
                                     2,
-                                    idColors[tracklets[i].id],
-                                    thickness=2,
+                                    STAR_COLOR,
+                                    thickness=1,
                                     lineType=8,
                                     shift=0,
                                 )
@@ -176,7 +182,7 @@ class OakdYoloStar(OakdTrackingYolo):
                                         birds,
                                         prev_point,
                                         cur_point,
-                                        idColors[tracklets[i].id],
+                                        STAR_COLOR,
                                         thickness=1,
                                     )
                                 prev_point = (
@@ -188,11 +194,11 @@ class OakdYoloStar(OakdTrackingYolo):
                                     birds,
                                     prev_point,
                                     (point_x, point_y),
-                                    idColors[tracklets[i].id],
-                                    2,
+                                    STAR_COLOR,
+                                    1,
                                 )
-        self.log_player.update_plotting_list(time.time() - self.start_time)
-        plot_logs = self.log_player.update_plot_data(time.time() - self.start_time)
+        self.log_player.update_plotting_list(time.time())
+        plot_logs = self.log_player.update_plot_data(time.time())
         for plot_log in plot_logs:
             point_y = self.pos_to_point_y(birds.shape[0], plot_log[1] * 1000)
             point_x = self.pos_to_point_x(birds.shape[1], plot_log[0] * 1000)
@@ -214,7 +220,7 @@ class LogPlayer(OrbitPlayer):
         log_path: str,
         start_time: int = 0,
         duration: float = 10.0,
-        speed: float = 0.3,
+        speed: float = 0.1,
         fov: float = 73.0,
         max_z: float = 15000,
     ) -> None:
@@ -223,6 +229,7 @@ class LogPlayer(OrbitPlayer):
 
         Args:
             log_path (str): ログファイルのパス。
+            start_time (int, optional): ログの再生開始時間。デフォルトは0。
             duration (float, optional): ログのplot追加の時間スケール。デフォルトは1.0。
             speed (float, optional): 再生速度。デフォルトは1.0。
             fov (float, optional): 俯瞰マップ上に描画されるOAK-Dの視野角 (度). デフォルトは 73.0 度。
@@ -293,16 +300,12 @@ class LogPlayer(OrbitPlayer):
         """
         updated_plotting_list = []
         for data in self.plotting_list:
-            if self.get_cur_index(cur_time, data) >= 0:
+            if self.get_plot_pos(cur_time, data) is not None:
                 updated_plotting_list.append(data)
         while True:
-            print(self.plotting_index)
             if self.plotting_index >= len(self.log["logs"]):
                 self.reset_plotting_log(cur_time)
                 break
-            print(
-                f'time:{self.log["logs"][self.plotting_index]["time"]}, cur_time:{cur_time}, plot_start_time:{self.plot_start_time}'
-            )
             if (
                 self.log["logs"][self.plotting_index]["time"] / self.duration
                 - (cur_time - self.plot_start_time)
@@ -339,9 +342,6 @@ class LogPlayer(OrbitPlayer):
         index = int(index)
         if index >= len(pos_log["pos"]) - 1:
             return None
-        print(
-            f'pos0: {pos_log["pos"][index][0]}, pos1: {pos_log["pos"][index + 1][0]}, decimal: {decimal}'
-        )
         return (
             pos_log["pos"][index][0] * (1 - decimal)
             + pos_log["pos"][index + 1][0] * decimal,

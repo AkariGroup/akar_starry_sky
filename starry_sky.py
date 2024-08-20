@@ -60,8 +60,8 @@ def main() -> None:
             show_orbit=True,
             log_path=args.log_path,
         )
-        oakd_yolo_star.update_bird_frame_width(2000)
-        oakd_yolo_star.update_bird_frame_distance(4000)
+        oakd_yolo_star.update_bird_frame_width(10000)
+        oakd_yolo_star.update_bird_frame_distance(10000)
         while True:
             frame = None
             detections = []
