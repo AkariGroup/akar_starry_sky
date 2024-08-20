@@ -88,7 +88,7 @@ class OakdYoloStar(OakdTrackingYolo):
 
         """
         frame = cv2.imread(str(self.BIRD_FRAME_BACKGROUND_IMAGE))
-        frame = cv2.resize(frame, (960, 540))
+        frame = cv2.resize(frame, (1440, 720))
         # cv2.rectangle(
         #    frame, (0, 283), (frame.shape[1], frame.shape[0]), (70, 70, 70), -1
         # )
@@ -173,7 +173,7 @@ class OakdYoloStar(OakdTrackingYolo):
                                     cur_point,
                                     2,
                                     STAR_COLOR,
-                                    thickness=1,
+                                    thickness=-1,
                                     lineType=8,
                                     shift=0,
                                 )
@@ -199,15 +199,17 @@ class OakdYoloStar(OakdTrackingYolo):
                                 )
         self.log_player.update_plotting_list(time.time())
         plot_logs = self.log_player.update_plot_data(time.time())
-        for plot_log in plot_logs:
+        for i, plot_log in enumerate(plot_logs):
             point_y = self.pos_to_point_y(birds.shape[0], plot_log[1] * 1000)
             point_x = self.pos_to_point_x(birds.shape[1], plot_log[0] * 1000)
             cv2.circle(
                 birds,
                 (point_x, point_y),
-                1,
+                self.log_player.blinking_plot_size(
+                    self.log_player.plotting_list[i]["size"]
+                ),
                 WHITE,
-                thickness=1,
+                thickness=-1,
                 lineType=8,
                 shift=0,
             )
@@ -219,8 +221,8 @@ class LogPlayer(OrbitPlayer):
         self,
         log_path: str,
         start_time: int = 0,
-        duration: float = 30.0,
-        speed: float = 0.03,
+        duration: float = 60.0,
+        speed: float = 0.01,
         fov: float = 73.0,
         max_z: float = 15000,
     ) -> None:
@@ -247,6 +249,12 @@ class LogPlayer(OrbitPlayer):
         )
         self.last_reset_time = self.plot_start_time
         self.max_x = 15000
+        self.PLOT_SIZE_LIST: List[Tuple[int, float]] = [
+            (1, 0.8),
+            (2, 0.15),
+            (3, 0.05),
+        ]  # 星のサイズと確率の組み合わせ
+        self.BLINKING_PROB = 0.1  # 点滅する確率
 
     def update_bird_frame_width(self, distance: int) -> None:
         """俯瞰フレームの横方向の表示最大値を変更する。
@@ -267,6 +275,35 @@ class LogPlayer(OrbitPlayer):
             int: bird frame上のx座標
         """
         return int(pos_x / self.max_x * frame_width + frame_width / 2)
+
+    def decide_plot_size(self) -> int:
+        """プロットする点のサイズを乱数で決定する。
+
+        Returns:
+            int: プロットするサイズ。
+
+        """
+        val = np.random.rand()
+        total_prob = 0
+        for size in self.PLOT_SIZE_LIST:
+            total_prob += size[1]
+            if val < total_prob:
+                return size[0]
+        return self.PLOT_SIZE_LIST[-1][0]
+
+    def blinking_plot_size(self, size: int) -> int:
+        """確率で点のサイズを1段階大きくし、瞬かせる。
+
+        Args:
+            size (int): 現在の点のサイズ。
+
+        Returns:
+            int: 変更後の点のサイズ。
+
+        """
+        if np.random.rand() < self.BLINKING_PROB:
+            return size + 1
+        return size
 
     def load_log(self, log_path: str) -> None:
         """
@@ -318,6 +355,7 @@ class LogPlayer(OrbitPlayer):
                 if not is_available:
                     new_data = copy.deepcopy(self.log["logs"][self.plotting_index])
                     new_data["time"] = cur_time
+                    new_data["size"] = self.decide_plot_size()
                     updated_plotting_list.append(new_data)
                 self.plotting_index += 1
             else:
