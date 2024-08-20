@@ -219,8 +219,8 @@ class LogPlayer(OrbitPlayer):
         self,
         log_path: str,
         start_time: int = 0,
-        duration: float = 10.0,
-        speed: float = 0.1,
+        duration: float = 30.0,
+        speed: float = 0.03,
         fov: float = 73.0,
         max_z: float = 15000,
     ) -> None:
