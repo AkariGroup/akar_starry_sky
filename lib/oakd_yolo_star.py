@@ -298,10 +298,9 @@ class LogPlayer(OrbitPlayer):
             cur_time (int): 時間。
 
         """
-        print(f"cur_time: {cur_time}, plot_start_time: {self.plot_start_time}")
         updated_plotting_list = []
         for data in self.plotting_list:
-            if self.get_cur_index(cur_time, data) >= 0:
+            if self.get_plot_pos(cur_time, data) is not None:
                 updated_plotting_list.append(data)
         while True:
             if self.plotting_index >= len(self.log["logs"]):
