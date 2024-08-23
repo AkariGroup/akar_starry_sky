@@ -46,7 +46,6 @@ def main() -> None:
         "https://github.com/AkariGroup/akari_yolo_models/raw/main/human_parts/human_parts.json",
     )
     end = False
-
     while not end:
         oakd_yolo_star = OakdYoloStar(
             config_path="config/human_parts.json",
@@ -62,6 +61,9 @@ def main() -> None:
         )
         oakd_yolo_star.update_bird_frame_width(10000)
         oakd_yolo_star.update_bird_frame_distance(10000)
+        is_fullscreen = True
+        cv2.namedWindow("birds",cv2.WINDOW_NORMAL)
+        cv2.setWindowProperty("birds",cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)
         while True:
             frame = None
             detections = []
@@ -76,9 +78,17 @@ def main() -> None:
                 break
             if frame is not None:
                 oakd_yolo_star.display_frame("nn", frame, tracklets)
-            if cv2.waitKey(1) == ord("q"):
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
                 end = True
                 break
+            elif key == ord('f'):
+                is_fullscreen = not is_fullscreen
+                if is_fullscreen:
+                    cv2.setWindowProperty('birds', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+                else:
+                    cv2.setWindowProperty('birds', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_NORMAL)
+
         oakd_yolo_star.close()
 
 

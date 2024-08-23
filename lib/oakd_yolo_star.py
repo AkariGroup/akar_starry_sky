@@ -88,7 +88,7 @@ class OakdYoloStar(OakdTrackingYolo):
 
         """
         frame = cv2.imread(str(self.BIRD_FRAME_BACKGROUND_IMAGE))
-        frame = cv2.resize(frame, (1440, 720))
+        frame = cv2.resize(frame, (1920, 1080))
         # cv2.rectangle(
         #    frame, (0, 283), (frame.shape[1], frame.shape[0]), (70, 70, 70), -1
         # )
