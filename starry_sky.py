@@ -46,8 +46,6 @@ def main() -> None:
         "https://github.com/AkariGroup/akari_yolo_models/raw/main/human_parts/human_parts.json",
     )
     end = False
-
-
     while not end:
         oakd_yolo_star = OakdYoloStar(
             config_path="config/human_parts.json",
