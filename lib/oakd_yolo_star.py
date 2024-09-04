@@ -18,7 +18,6 @@ from .akari_yolo_lib.oakd_tracking_yolo import (
 )
 
 DISPLAY_WINDOW_SIZE_RATE = 2.0
-idColors = np.random.random(size=(512, 3)) * 256
 WHITE = (255, 255, 255)
 STAR_COLOR = (124, 252, 244)
 
