@@ -73,10 +73,21 @@ class OakdYoloStar(OakdTrackingYolo):
         )
         self.max_x = 15000
         self.start_time = time.time()
+        self.normalize_x = True
         log_file_path = self.orbit_data_list.get_log_path()
         self.log_player = LogPlayer(log_file_path, start_time=self.start_time)
         self.log_player.update_bird_frame_distance(self.max_z)
         self.log_player.update_bird_frame_width(self.max_x)
+
+    def set_normalize_x(self, normalize_x: bool) -> None:
+        """X座標の正規化を設定する。
+
+        Args:
+            normalize_x (bool): X座標を正規化するかどうか。
+
+        """
+        self.normalize_x = normalize_x
+        self.log_player.normalize_x = normalize_x
 
     def create_bird_frame(self) -> np.ndarray:
         """
@@ -108,7 +119,7 @@ class OakdYoloStar(OakdTrackingYolo):
         """
         self.max_z = distance
 
-    def pos_to_point_x(self, frame_width: int, pos_x: float) -> int:
+    def pos_to_point_x(self, frame_width: int, pos_x: float, pos_z: float) -> int:
         """
         3次元位置をbird frame上のx座標に変換する
 
@@ -119,6 +130,12 @@ class OakdYoloStar(OakdTrackingYolo):
         Returns:
             int: bird frame上のx座標
         """
+        # x座標を正規化する場合は、そのz座標においての視野角でx方向の最大値を求める
+        if self.normalize_x and pos_z > 0.0:
+            normalize_rate = pos_z * math.tan(math.radians(self.fov / 2)) / self.max_x
+            if normalize_rate > 1.0:
+                normalize_rate = 1.0
+            pos_x = pos_x / normalize_rate
         return int(pos_x / self.max_x * frame_width + frame_width / 2)
 
     def draw_bird_frame(self, tracklets: List[Any], show_labels: bool = False) -> None:
@@ -138,7 +155,9 @@ class OakdYoloStar(OakdTrackingYolo):
                         birds.shape[0], tracklets[i].spatialCoordinates.z
                     )
                     point_x = self.pos_to_point_x(
-                        birds.shape[1], tracklets[i].spatialCoordinates.x
+                        birds.shape[1],
+                        tracklets[i].spatialCoordinates.x,
+                        tracklets[i].spatialCoordinates.z,
                     )
                     if show_labels:
                         cv2.putText(
@@ -164,7 +183,7 @@ class OakdYoloStar(OakdTrackingYolo):
                             prev_point: Optional[Tuple[int, int]] = None
                             for pos in orbit.pos_log:
                                 cur_point = (
-                                    self.pos_to_point_x(birds.shape[1], pos.x),
+                                    self.pos_to_point_x(birds.shape[1], pos.x, pos.z),
                                     self.pos_to_point_y(birds.shape[0], pos.z),
                                 )
                                 cv2.circle(
@@ -185,7 +204,7 @@ class OakdYoloStar(OakdTrackingYolo):
                                         thickness=1,
                                     )
                                 prev_point = (
-                                    self.pos_to_point_x(birds.shape[1], pos.x),
+                                    self.pos_to_point_x(birds.shape[1], pos.x, pos.z),
                                     self.pos_to_point_y(birds.shape[0], pos.z),
                                 )
                             if prev_point is not None:
@@ -200,7 +219,9 @@ class OakdYoloStar(OakdTrackingYolo):
         plot_logs = self.log_player.update_plot_data(time.time())
         for i, plot_log in enumerate(plot_logs):
             point_y = self.pos_to_point_y(birds.shape[0], plot_log[1] * 1000)
-            point_x = self.pos_to_point_x(birds.shape[1], plot_log[0] * 1000)
+            point_x = self.pos_to_point_x(
+                birds.shape[1], plot_log[0] * 1000, plot_log[1] * 1000
+            )
             cv2.circle(
                 birds,
                 (point_x, point_y),
@@ -220,7 +241,7 @@ class LogPlayer(OrbitPlayer):
         self,
         log_path: str,
         start_time: int = 0,
-        duration: float = 60.0,
+        duration: float = 6000.0,
         speed: float = 0.01,
         fov: float = 73.0,
         max_z: float = 15000,
@@ -243,6 +264,7 @@ class LogPlayer(OrbitPlayer):
         self.log_path = log_path
         self.load_log(self.log_path)
         self.plot_start_time = start_time
+        self.normalize_x = True
         self.RESTART_INTERVAL = (
             10  # リセットした際に再度ログをプロットし始めるまでの時間[s]
         )
@@ -262,7 +284,7 @@ class LogPlayer(OrbitPlayer):
         """
         self.max_x = distance
 
-    def pos_to_point_x(self, frame_width: int, pos_x: float) -> int:
+    def pos_to_point_x(self, frame_width: int, pos_x: float, pos_z: float) -> int:
         """
         3次元位置をbird frame上のx座標に変換する
 
@@ -273,6 +295,12 @@ class LogPlayer(OrbitPlayer):
         Returns:
             int: bird frame上のx座標
         """
+        # x座標を正規化する場合は、そのz座標においての視野角でx方向の最大値を求める
+        if self.normalize_x and pos_z > 0.0:
+            normalize_rate = pos_z * math.tan(math.radians(self.fov / 2)) / self.max_x
+            if normalize_rate > 1.0:
+                normalize_rate = 1.0
+            pos_x = pos_x / normalize_rate
         return int(pos_x / self.max_x * frame_width + frame_width / 2)
 
     def decide_plot_size(self) -> int:

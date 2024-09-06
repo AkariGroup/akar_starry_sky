@@ -59,7 +59,7 @@ def main() -> None:
             show_orbit=True,
             log_path=args.log_path,
         )
-        oakd_yolo_star.update_bird_frame_width(10000)
+        oakd_yolo_star.update_bird_frame_width(8000)
         oakd_yolo_star.update_bird_frame_distance(10000)
         is_fullscreen = True
         cv2.namedWindow("birds",cv2.WINDOW_NORMAL)
