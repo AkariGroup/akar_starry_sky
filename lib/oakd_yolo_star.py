@@ -59,7 +59,7 @@ class OakdYoloStar(OakdTrackingYolo):
             os.path.dirname(__file__) + "/../jpg/background.jpg"
         )
         self.BIRD_FRAME_OVERLAY_IMAGE = os.path.dirname(__file__) + "/../jpg/front.jpg"
-        self.overlay_frame = cv2.imread(self.BIRD_FRAME_OVERLAY_IMAGE)
+        self.overlay_frame = cv2.imread(self.BIRD_FRAME_OVERLAY_IMAGE, cv2.IMREAD_UNCHANGED)
         super().__init__(
             config_path=config_path,
             model_path=model_path,
@@ -93,24 +93,13 @@ class OakdYoloStar(OakdTrackingYolo):
         Returns:
             np.ndarray: 合成後の画像。
         """
-        # 背景画像の形状を取得
         bg_h, bg_w, _ = background.shape
-
-        # オーバーレイ画像の形状を取得（アルファチャンネルも含む）
         h, w, _ = overlay.shape
-
-        # オーバーレイ画像がフレーム外に出ないように調整
         if x >= bg_w or y >= bg_h:
             return background
-
-        # 表示領域がフレーム外に出る場合を考慮
         h = min(h, bg_h - y)
         w = min(w, bg_w - x)
-
-        # オーバーレイ画像の形状を調整
         overlay = overlay[0:h, 0:w]
-
-        # アルファチャンネルを抽出
         if overlay.shape[2] == 4:
             overlay_img = overlay[:, :, :3]  # RGBチャンネル
             alpha_mask = overlay[:, :, 3] / 255.0  # アルファチャンネル（0-1のスケール）
@@ -119,18 +108,12 @@ class OakdYoloStar(OakdTrackingYolo):
             alpha_mask = np.ones(
                 (h, w), dtype=np.float32
             )  # アルファがない場合は完全不透明
-
-        # 背景画像からオーバーレイを貼る部分を抽出
         background_subsection = background[y : y + h, x : x + w]
-
-        # アルファチャンネルを使って合成
         for c in range(0, 3):
             background_subsection[:, :, c] = (
                 alpha_mask * overlay_img[:, :, c]
                 + (1 - alpha_mask) * background_subsection[:, :, c]
             )
-
-        # 合成結果を元の背景画像に戻す
         background[y : y + h, x : x + w] = background_subsection
         return background
 
