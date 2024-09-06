@@ -56,8 +56,10 @@ class OakdYoloStar(OakdTrackingYolo):
 
         """
         self.BIRD_FRAME_BACKGROUND_IMAGE = (
-            os.path.dirname(__file__) + "/../jpg/night_sky.jpg"
+            os.path.dirname(__file__) + "/../jpg/background.jpg"
         )
+        self.BIRD_FRAME_OVERLAY_IMAGE = os.path.dirname(__file__) + "/../jpg/front.jpg"
+        self.overlay_frame = cv2.imread(self.BIRD_FRAME_OVERLAY_IMAGE)
         super().__init__(
             config_path=config_path,
             model_path=model_path,
@@ -78,6 +80,42 @@ class OakdYoloStar(OakdTrackingYolo):
         self.log_player = LogPlayer(log_file_path, start_time=self.start_time)
         self.log_player.update_bird_frame_distance(self.max_z)
         self.log_player.update_bird_frame_width(self.max_x)
+
+    def overlay_transparent(self, background, overlay, x, y):
+        """画像を透過合成する。
+
+        Args:
+            background (np.ndarray): 背景画像。
+            overlay (np.ndarray): 重ねる画像。
+            x (int): 重ねる画像の左上のx座標。
+            y (int): 重ねる画像の左上のy座標。
+
+        Returns:
+            np.ndarray: 合成後の画像。
+        """
+        bg_h, bg_w, _ = background.shape
+        h, w, _ = overlay.shape
+        if x >= bg_w or y >= bg_h:
+            return background
+        h = min(h, bg_h - y)
+        w = min(w, bg_w - x)
+        overlay = overlay[0:h, 0:w]
+        if overlay.shape[2] == 4:
+            overlay_img = overlay[:, :, :3]  # RGBチャンネル
+            alpha_mask = overlay[:, :, 3] / 255.0  # アルファチャンネル（0-1のスケール）
+        else:
+            overlay_img = overlay
+            alpha_mask = np.ones(
+                (h, w), dtype=np.float32
+            )  # アルファがない場合は完全不透明
+        background_subsection = background[y : y + h, x : x + w]
+        for c in range(0, 3):
+            background_subsection[:, :, c] = (
+                alpha_mask * overlay_img[:, :, c]
+                + (1 - alpha_mask) * background_subsection[:, :, c]
+            )
+        background[y : y + h, x : x + w] = background_subsection
+        return background
 
     def set_normalize_x(self, normalize_x: bool) -> None:
         """X座標の正規化を設定する。
@@ -233,6 +271,7 @@ class OakdYoloStar(OakdTrackingYolo):
                 lineType=8,
                 shift=0,
             )
+        birds = self.overlay_transparent(birds, self.overlay_frame, 0, 0)
         cv2.imshow("birds", birds)
 
 
