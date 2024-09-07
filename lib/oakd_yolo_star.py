@@ -280,7 +280,7 @@ class LogPlayer(OrbitPlayer):
         self,
         log_path: str,
         start_time: int = 0,
-        duration: float = 6000.0,
+        duration: float = 60.0,
         speed: float = 0.01,
         fov: float = 73.0,
         max_z: float = 15000,
