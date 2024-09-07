@@ -56,8 +56,10 @@ class OakdYoloStar(OakdTrackingYolo):
 
         """
         self.BIRD_FRAME_BACKGROUND_IMAGE = (
-            os.path.dirname(__file__) + "/../jpg/night_sky.jpg"
+            os.path.dirname(__file__) + "/../jpg/background.jpg"
         )
+        self.BIRD_FRAME_OVERLAY_IMAGE = os.path.dirname(__file__) + "/../jpg/front.jpg"
+        self.overlay_frame = cv2.imread(self.BIRD_FRAME_OVERLAY_IMAGE, cv2.IMREAD_UNCHANGED)
         super().__init__(
             config_path=config_path,
             model_path=model_path,
@@ -73,10 +75,57 @@ class OakdYoloStar(OakdTrackingYolo):
         )
         self.max_x = 15000
         self.start_time = time.time()
+        self.normalize_x = True
         log_file_path = self.orbit_data_list.get_log_path()
         self.log_player = LogPlayer(log_file_path, start_time=self.start_time)
         self.log_player.update_bird_frame_distance(self.max_z)
         self.log_player.update_bird_frame_width(self.max_x)
+
+    def overlay_transparent(self, background, overlay, x, y):
+        """画像を透過合成する。
+
+        Args:
+            background (np.ndarray): 背景画像。
+            overlay (np.ndarray): 重ねる画像。
+            x (int): 重ねる画像の左上のx座標。
+            y (int): 重ねる画像の左上のy座標。
+
+        Returns:
+            np.ndarray: 合成後の画像。
+        """
+        bg_h, bg_w, _ = background.shape
+        h, w, _ = overlay.shape
+        if x >= bg_w or y >= bg_h:
+            return background
+        h = min(h, bg_h - y)
+        w = min(w, bg_w - x)
+        overlay = overlay[0:h, 0:w]
+        if overlay.shape[2] == 4:
+            overlay_img = overlay[:, :, :3]  # RGBチャンネル
+            alpha_mask = overlay[:, :, 3] / 255.0  # アルファチャンネル（0-1のスケール）
+        else:
+            overlay_img = overlay
+            alpha_mask = np.ones(
+                (h, w), dtype=np.float32
+            )  # アルファがない場合は完全不透明
+        background_subsection = background[y : y + h, x : x + w]
+        for c in range(0, 3):
+            background_subsection[:, :, c] = (
+                alpha_mask * overlay_img[:, :, c]
+                + (1 - alpha_mask) * background_subsection[:, :, c]
+            )
+        background[y : y + h, x : x + w] = background_subsection
+        return background
+
+    def set_normalize_x(self, normalize_x: bool) -> None:
+        """X座標の正規化を設定する。
+
+        Args:
+            normalize_x (bool): X座標を正規化するかどうか。
+
+        """
+        self.normalize_x = normalize_x
+        self.log_player.normalize_x = normalize_x
 
     def create_bird_frame(self) -> np.ndarray:
         """
@@ -108,7 +157,7 @@ class OakdYoloStar(OakdTrackingYolo):
         """
         self.max_z = distance
 
-    def pos_to_point_x(self, frame_width: int, pos_x: float) -> int:
+    def pos_to_point_x(self, frame_width: int, pos_x: float, pos_z: float) -> int:
         """
         3次元位置をbird frame上のx座標に変換する
 
@@ -119,6 +168,12 @@ class OakdYoloStar(OakdTrackingYolo):
         Returns:
             int: bird frame上のx座標
         """
+        # x座標を正規化する場合は、そのz座標においての視野角でx方向の最大値を求める
+        if self.normalize_x and pos_z > 0.0:
+            normalize_rate = pos_z * math.tan(math.radians(self.fov / 2)) / self.max_x
+            if normalize_rate > 1.0:
+                normalize_rate = 1.0
+            pos_x = pos_x / normalize_rate
         return int(pos_x / self.max_x * frame_width + frame_width / 2)
 
     def draw_bird_frame(self, tracklets: List[Any], show_labels: bool = False) -> None:
@@ -138,7 +193,9 @@ class OakdYoloStar(OakdTrackingYolo):
                         birds.shape[0], tracklets[i].spatialCoordinates.z
                     )
                     point_x = self.pos_to_point_x(
-                        birds.shape[1], tracklets[i].spatialCoordinates.x
+                        birds.shape[1],
+                        tracklets[i].spatialCoordinates.x,
+                        tracklets[i].spatialCoordinates.z,
                     )
                     if show_labels:
                         cv2.putText(
@@ -164,7 +221,7 @@ class OakdYoloStar(OakdTrackingYolo):
                             prev_point: Optional[Tuple[int, int]] = None
                             for pos in orbit.pos_log:
                                 cur_point = (
-                                    self.pos_to_point_x(birds.shape[1], pos.x),
+                                    self.pos_to_point_x(birds.shape[1], pos.x, pos.z),
                                     self.pos_to_point_y(birds.shape[0], pos.z),
                                 )
                                 cv2.circle(
@@ -185,7 +242,7 @@ class OakdYoloStar(OakdTrackingYolo):
                                         thickness=1,
                                     )
                                 prev_point = (
-                                    self.pos_to_point_x(birds.shape[1], pos.x),
+                                    self.pos_to_point_x(birds.shape[1], pos.x, pos.z),
                                     self.pos_to_point_y(birds.shape[0], pos.z),
                                 )
                             if prev_point is not None:
@@ -200,7 +257,9 @@ class OakdYoloStar(OakdTrackingYolo):
         plot_logs = self.log_player.update_plot_data(time.time())
         for i, plot_log in enumerate(plot_logs):
             point_y = self.pos_to_point_y(birds.shape[0], plot_log[1] * 1000)
-            point_x = self.pos_to_point_x(birds.shape[1], plot_log[0] * 1000)
+            point_x = self.pos_to_point_x(
+                birds.shape[1], plot_log[0] * 1000, plot_log[1] * 1000
+            )
             cv2.circle(
                 birds,
                 (point_x, point_y),
@@ -212,6 +271,7 @@ class OakdYoloStar(OakdTrackingYolo):
                 lineType=8,
                 shift=0,
             )
+        birds = self.overlay_transparent(birds, self.overlay_frame, 0, 0)
         cv2.imshow("birds", birds)
 
 
@@ -243,6 +303,7 @@ class LogPlayer(OrbitPlayer):
         self.log_path = log_path
         self.load_log(self.log_path)
         self.plot_start_time = start_time
+        self.normalize_x = True
         self.RESTART_INTERVAL = (
             10  # リセットした際に再度ログをプロットし始めるまでの時間[s]
         )
@@ -262,7 +323,7 @@ class LogPlayer(OrbitPlayer):
         """
         self.max_x = distance
 
-    def pos_to_point_x(self, frame_width: int, pos_x: float) -> int:
+    def pos_to_point_x(self, frame_width: int, pos_x: float, pos_z: float) -> int:
         """
         3次元位置をbird frame上のx座標に変換する
 
@@ -273,6 +334,12 @@ class LogPlayer(OrbitPlayer):
         Returns:
             int: bird frame上のx座標
         """
+        # x座標を正規化する場合は、そのz座標においての視野角でx方向の最大値を求める
+        if self.normalize_x and pos_z > 0.0:
+            normalize_rate = pos_z * math.tan(math.radians(self.fov / 2)) / self.max_x
+            if normalize_rate > 1.0:
+                normalize_rate = 1.0
+            pos_x = pos_x / normalize_rate
         return int(pos_x / self.max_x * frame_width + frame_width / 2)
 
     def decide_plot_size(self) -> int:
