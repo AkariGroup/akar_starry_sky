@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import copy
-import json
+import ndjson
 import math
 import os
 import time
@@ -77,7 +77,7 @@ class OakdYoloStar(OakdTrackingYolo):
         self.start_time = time.time()
         self.normalize_x = True
         log_file_path = self.orbit_data_list.get_log_path()
-        self.log_player = LogPlayer(log_file_path, start_time=self.start_time)
+        self.log_player = LogPlayer(log_file_path, log_shared=self.log, start_time=self.start_time)
         self.log_player.update_bird_frame_distance(self.max_z)
         self.log_player.update_bird_frame_width(self.max_x)
 
@@ -253,6 +253,8 @@ class OakdYoloStar(OakdTrackingYolo):
                                     STAR_COLOR,
                                     1,
                                 )
+        print("self.log len = ", len(self.log))
+        print("log player len = ", len(self.log_player.log))
         self.log_player.update_plotting_list(time.time())
         plot_logs = self.log_player.update_plot_data(time.time())
         for i, plot_log in enumerate(plot_logs):
@@ -279,6 +281,7 @@ class LogPlayer(OrbitPlayer):
     def __init__(
         self,
         log_path: str,
+        log_shared: List[Any],
         start_time: int = 0,
         duration: float = 60.0,
         speed: float = 0.01,
@@ -302,6 +305,7 @@ class LogPlayer(OrbitPlayer):
         self.plotting_index = 0
         self.log_path = log_path
         self.load_log(self.log_path)
+        self.log = log_shared
         self.plot_start_time = start_time
         self.normalize_x = True
         self.RESTART_INTERVAL = (
@@ -381,7 +385,7 @@ class LogPlayer(OrbitPlayer):
         """
         try:
             json_open = open(log_path, "r")
-            self.log = json.load(json_open)
+            self.log = ndjson.load(json_open)
         except FileNotFoundError:
             print(f"Error: The file {log_path} does not exist.")
             return
@@ -406,20 +410,20 @@ class LogPlayer(OrbitPlayer):
             if self.get_plot_pos(cur_time, data) is not None:
                 updated_plotting_list.append(data)
         while True:
-            if self.plotting_index >= len(self.log["logs"]):
+            if self.plotting_index >= len(self.log):
                 self.reset_plotting_log(cur_time)
                 break
             if (
-                self.log["logs"][self.plotting_index]["time"] / self.duration
+                self.log[self.plotting_index]["time"] / self.duration
                 - (cur_time - self.plot_start_time)
             ) <= 0:
                 # timeを現在時刻に更新した上でplotting_listに追加
                 is_available = False
                 for data in updated_plotting_list:
-                    if data["id"] == self.log["logs"][self.plotting_index]["id"]:
+                    if data["id"] == self.log[self.plotting_index]["id"]:
                         is_available = True
                 if not is_available:
-                    new_data = copy.deepcopy(self.log["logs"][self.plotting_index])
+                    new_data = copy.deepcopy(self.log[self.plotting_index])
                     new_data["time"] = cur_time
                     new_data["size"] = self.decide_plot_size()
                     updated_plotting_list.append(new_data)
