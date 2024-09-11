@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 import copy
-import json
+from datetime import datetime
+import ndjson
 import math
 import os
 import time
@@ -59,7 +60,9 @@ class OakdYoloStar(OakdTrackingYolo):
             os.path.dirname(__file__) + "/../jpg/background.jpg"
         )
         self.BIRD_FRAME_OVERLAY_IMAGE = os.path.dirname(__file__) + "/../jpg/front.jpg"
-        self.overlay_frame = cv2.imread(self.BIRD_FRAME_OVERLAY_IMAGE, cv2.IMREAD_UNCHANGED)
+        self.overlay_frame = cv2.imread(
+            self.BIRD_FRAME_OVERLAY_IMAGE, cv2.IMREAD_UNCHANGED
+        )
         super().__init__(
             config_path=config_path,
             model_path=model_path,
@@ -72,12 +75,18 @@ class OakdYoloStar(OakdTrackingYolo):
             show_spatial_frame=show_spatial_frame,
             show_orbit=show_orbit,
             log_path=log_path,
+            log_continue=True,
         )
         self.max_x = 15000
         self.start_time = time.time()
         self.normalize_x = True
         log_file_path = self.orbit_data_list.get_log_path()
-        self.log_player = LogPlayer(log_file_path, start_time=self.start_time)
+        self.log_player = LogPlayer(
+            oakd_yolo_star=self,
+            log_path=log_file_path,
+            start_time=self.start_time,
+            interval=self.orbit_data_list.LOGGING_INTEREVAL,
+        )
         self.log_player.update_bird_frame_distance(self.max_z)
         self.log_player.update_bird_frame_width(self.max_x)
 
@@ -278,32 +287,52 @@ class OakdYoloStar(OakdTrackingYolo):
 class LogPlayer(OrbitPlayer):
     def __init__(
         self,
+        oakd_yolo_star: OakdYoloStar,
         log_path: str,
         start_time: int = 0,
         duration: float = 60.0,
         speed: float = 0.01,
         fov: float = 73.0,
         max_z: float = 15000,
+        interval: float = 0.5,
     ) -> None:
         """
         ログファイルを再生するクラス。
 
         Args:
+            oakd_yolo_star (OakdYoloStar): OakdYoloStarクラスのインスタンス。
             log_path (str): ログファイルのパス。
             start_time (int, optional): ログの再生開始時間。デフォルトは0。
             duration (float, optional): ログのplot追加の時間スケール。デフォルトは1.0。
             speed (float, optional): 再生速度。デフォルトは1.0。
             fov (float, optional): 俯瞰マップ上に描画されるOAK-Dの視野角 (度). デフォルトは 73.0 度。
             max_z (float, optional): 俯瞰マップの最大Z座標値. デフォルトは 15000。
+            interval (float, optional): ログの時間間隔。デフォルトは 0.5。
         """
-        super().__init__(log_path, speed, fov, max_z)
+        self.LOG_DATETIME_FORMAT = "%Y/%m/%d %H:%M:%S"
+        self.oakd_yolo_star = oakd_yolo_star
+        self.log = copy.deepcopy(self.oakd_yolo_star.log)
         self.duration = duration
         self.plotting_list: List[PosLog] = []
         self.plotting_index = 0
         self.log_path = log_path
-        self.load_log(self.log_path)
         self.plot_start_time = start_time
         self.normalize_x = True
+        self.fov = fov
+        self.speed = speed
+        self.max_z = max_z
+        self.interval = interval
+        self.bird_eye_frame = self.create_bird_frame()
+        self.datetime = datetime.now()
+        if len(self.log) > 0:
+            self.datetime = datetime.strptime(
+                min(
+                    self.log,
+                    key=lambda x: datetime.strptime(x["time"], self.LOG_DATETIME_FORMAT),
+                )["time"],
+                self.LOG_DATETIME_FORMAT,
+            )
+        self.end_time = self.get_end_time(self.log)
         self.RESTART_INTERVAL = (
             10  # リセットした際に再度ログをプロットし始めるまでの時間[s]
         )
@@ -371,25 +400,10 @@ class LogPlayer(OrbitPlayer):
             return size + 1
         return size
 
-    def load_log(self, log_path: str) -> None:
-        """
-        ログファイルを読み込む。
-
-        Args:
-            log_path (str): ログファイルのパス。
-
-        """
-        try:
-            json_open = open(log_path, "r")
-            self.log = json.load(json_open)
-        except FileNotFoundError:
-            print(f"Error: The file {log_path} does not exist.")
-            return
-
     def reset_plotting_log(self, cur_time: int) -> None:
         """プロットする物体リストをリセットする。"""
         self.plotting_index = 0
-        self.load_log(self.log_path)
+        self.log = copy.deepcopy(self.oakd_yolo_star.log)
         self.plot_start_time = cur_time
         self.last_reset_time = cur_time
 
@@ -406,20 +420,26 @@ class LogPlayer(OrbitPlayer):
             if self.get_plot_pos(cur_time, data) is not None:
                 updated_plotting_list.append(data)
         while True:
-            if self.plotting_index >= len(self.log["logs"]):
+            if self.plotting_index >= len(self.log):
                 self.reset_plotting_log(cur_time)
                 break
             if (
-                self.log["logs"][self.plotting_index]["time"] / self.duration
+                (
+                    datetime.strptime(
+                        self.log[self.plotting_index]["time"], self.LOG_DATETIME_FORMAT
+                    )
+                    - self.datetime
+                ).total_seconds()
+                / self.duration
                 - (cur_time - self.plot_start_time)
             ) <= 0:
                 # timeを現在時刻に更新した上でplotting_listに追加
                 is_available = False
                 for data in updated_plotting_list:
-                    if data["id"] == self.log["logs"][self.plotting_index]["id"]:
+                    if data["id"] == self.log[self.plotting_index]["id"]:
                         is_available = True
                 if not is_available:
-                    new_data = copy.deepcopy(self.log["logs"][self.plotting_index])
+                    new_data = copy.deepcopy(self.log[self.plotting_index])
                     new_data["time"] = cur_time
                     new_data["size"] = self.decide_plot_size()
                     updated_plotting_list.append(new_data)
