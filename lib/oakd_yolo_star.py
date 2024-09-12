@@ -204,7 +204,9 @@ class OakdYoloStar(OakdTrackingYolo):
         Returns:
             int: bird frame上のy座標
         """
-        return frame_height - int((pos_z - self.z_offset) / self.max_z * frame_height) - 20
+        return (
+            frame_height - int((pos_z - self.z_offset) / self.max_z * frame_height) - 20
+        )
 
     def draw_bird_frame(self, tracklets: List[Any], show_labels: bool = False) -> None:
         """
@@ -311,7 +313,7 @@ class LogPlayer(OrbitPlayer):
         oakd_yolo_star: OakdYoloStar,
         log_path: str,
         start_time: int = 0,
-        duration: float = 6000.0,
+        duration: float = 60.0,
         speed: float = 0.01,
         fov: float = 73.0,
         max_z: float = 15000,
@@ -413,7 +415,9 @@ class LogPlayer(OrbitPlayer):
         Returns:
             int: bird frame上のy座標
         """
-        return frame_height - int((pos_z - self.z_offset) / self.max_z * frame_height) - 20
+        return (
+            frame_height - int((pos_z - self.z_offset) / self.max_z * frame_height) - 20
+        )
 
     def decide_plot_size(self) -> int:
         """プロットする点のサイズを乱数で決定する。

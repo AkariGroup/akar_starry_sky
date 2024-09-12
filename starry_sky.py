@@ -59,9 +59,12 @@ def main() -> None:
             show_orbit=True,
             log_path=args.log_path,
         )
-        oakd_yolo_star.update_bird_frame_width(8000)
+        # 最大表示左右距離を指定[mm]。10000を指定すると、左端から右端が10000mmになる。
+        oakd_yolo_star.update_bird_frame_width(10000)
+        # 最大表示奥行き距離を指定[mm]。10000を指定すると、上端から下端が10000mmになる。
         oakd_yolo_star.update_bird_frame_distance(10000)
-        oakd_yolo_star.update_bird_frame_distance_offset(2000)
+        # 奥行き距離オフセットを指定[mm]。1000を指定すると、1000mm離れた場所が下端に表示される。
+        oakd_yolo_star.update_bird_frame_distance_offset(1000)
         is_fullscreen = True
         cv2.namedWindow("birds",cv2.WINDOW_NORMAL)
         cv2.setWindowProperty("birds",cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)
