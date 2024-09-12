@@ -78,6 +78,7 @@ class OakdYoloStar(OakdTrackingYolo):
             log_continue=True,
         )
         self.max_x = 15000
+        self.z_offset = 0
         self.start_time = time.time()
         self.normalize_x = True
         log_file_path = self.orbit_data_list.get_log_path()
@@ -87,6 +88,7 @@ class OakdYoloStar(OakdTrackingYolo):
             start_time=self.start_time,
             interval=self.orbit_data_list.LOGGING_INTEREVAL,
         )
+        self.z_offset = 0
         self.log_player.update_bird_frame_distance(self.max_z)
         self.log_player.update_bird_frame_width(self.max_x)
 
@@ -146,10 +148,6 @@ class OakdYoloStar(OakdTrackingYolo):
         """
         frame = cv2.imread(str(self.BIRD_FRAME_BACKGROUND_IMAGE))
         frame = cv2.resize(frame, (1920, 1080))
-        # cv2.rectangle(
-        #    frame, (0, 283), (frame.shape[1], frame.shape[0]), (70, 70, 70), -1
-        # )
-        # cv2.fillPoly(frame, [fov_cnt], color=(70, 70, 70))
         return frame
 
     def update_bird_frame_width(self, distance: int) -> None:
@@ -158,6 +156,7 @@ class OakdYoloStar(OakdTrackingYolo):
             distance (int): 最大横幅[mm]。
         """
         self.max_x = distance
+        self.log_player.update_bird_frame_width(distance)
 
     def update_bird_frame_distance(self, distance: int) -> None:
         """俯瞰フレームの距離方向の表示最大値を変更する。
@@ -165,6 +164,15 @@ class OakdYoloStar(OakdTrackingYolo):
             distance (int): 最大距離[mm]。
         """
         self.max_z = distance
+        self.log_player.update_bird_frame_distance(distance)
+
+    def update_bird_frame_distance_offset(self, offset: int) -> None:
+        """俯瞰フレームの距離方向のオフセット値を変更する。設定した値だけ表示を遠くにオフセットする。
+        Args:
+            distance (int): 最大距離[mm]。
+        """
+        self.z_offset = offset
+        self.log_player.update_bird_frame_distance_offset(offset)
 
     def pos_to_point_x(self, frame_width: int, pos_x: float, pos_z: float) -> int:
         """
@@ -184,6 +192,19 @@ class OakdYoloStar(OakdTrackingYolo):
                 normalize_rate = 1.0
             pos_x = pos_x / normalize_rate
         return int(pos_x / self.max_x * frame_width + frame_width / 2)
+
+    def pos_to_point_y(self, frame_height: int, pos_z: float) -> int:
+        """
+        3次元位置をbird frame上のy座標に変換する
+
+        Args:
+            frame_height (int): bird frameの高さ
+            pos_z (float): 3次元位置のz
+
+        Returns:
+            int: bird frame上のy座標
+        """
+        return frame_height - int((pos_z - self.z_offset) / self.max_z * frame_height) - 20
 
     def draw_bird_frame(self, tracklets: List[Any], show_labels: bool = False) -> None:
         """
@@ -290,7 +311,7 @@ class LogPlayer(OrbitPlayer):
         oakd_yolo_star: OakdYoloStar,
         log_path: str,
         start_time: int = 0,
-        duration: float = 60.0,
+        duration: float = 6000.0,
         speed: float = 0.01,
         fov: float = 73.0,
         max_z: float = 15000,
@@ -321,6 +342,7 @@ class LogPlayer(OrbitPlayer):
         self.fov = fov
         self.speed = speed
         self.max_z = max_z
+        self.z_offset = 0
         self.interval = interval
         self.bird_eye_frame = self.create_bird_frame()
         self.datetime = datetime.now()
@@ -328,7 +350,9 @@ class LogPlayer(OrbitPlayer):
             self.datetime = datetime.strptime(
                 min(
                     self.log,
-                    key=lambda x: datetime.strptime(x["time"], self.LOG_DATETIME_FORMAT),
+                    key=lambda x: datetime.strptime(
+                        x["time"], self.LOG_DATETIME_FORMAT
+                    ),
                 )["time"],
                 self.LOG_DATETIME_FORMAT,
             )
@@ -352,6 +376,13 @@ class LogPlayer(OrbitPlayer):
         """
         self.max_x = distance
 
+    def update_bird_frame_distance_offset(self, offset: int) -> None:
+        """俯瞰フレームの距離方向のオフセット値を変更する。設定した値だけ表示を遠くにオフセットする。
+        Args:
+            distance (int): 最大距離[mm]。
+        """
+        self.z_offset = offset
+
     def pos_to_point_x(self, frame_width: int, pos_x: float, pos_z: float) -> int:
         """
         3次元位置をbird frame上のx座標に変換する
@@ -370,6 +401,19 @@ class LogPlayer(OrbitPlayer):
                 normalize_rate = 1.0
             pos_x = pos_x / normalize_rate
         return int(pos_x / self.max_x * frame_width + frame_width / 2)
+
+    def pos_to_point_y(self, frame_height: int, pos_z: float) -> int:
+        """
+        3次元位置をbird frame上のy座標に変換する
+
+        Args:
+            frame_height (int): bird frameの高さ
+            pos_z (float): 3次元位置のz
+
+        Returns:
+            int: bird frame上のy座標
+        """
+        return frame_height - int((pos_z - self.z_offset) / self.max_z * frame_height) - 20
 
     def decide_plot_size(self) -> int:
         """プロットする点のサイズを乱数で決定する。
@@ -403,7 +447,8 @@ class LogPlayer(OrbitPlayer):
     def reset_plotting_log(self, cur_time: int) -> None:
         """プロットする物体リストをリセットする。"""
         self.plotting_index = 0
-        self.log = copy.deepcopy(self.oakd_yolo_star.log)
+        for i in range(len(self.log), len(self.oakd_yolo_star.log)):
+            self.log.append(self.oakd_yolo_star.log[i])
         self.plot_start_time = cur_time
         self.last_reset_time = cur_time
 

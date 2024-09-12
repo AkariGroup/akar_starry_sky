@@ -61,6 +61,7 @@ def main() -> None:
         )
         oakd_yolo_star.update_bird_frame_width(8000)
         oakd_yolo_star.update_bird_frame_distance(10000)
+        oakd_yolo_star.update_bird_frame_distance_offset(2000)
         is_fullscreen = True
         cv2.namedWindow("birds",cv2.WINDOW_NORMAL)
         cv2.setWindowProperty("birds",cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)
