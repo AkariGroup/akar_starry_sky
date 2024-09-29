@@ -39,6 +39,8 @@ class OakdYoloStar(OakdTrackingYolo):
         show_spatial_frame: bool = False,
         show_orbit: bool = True,
         log_path: Optional[str] = "log",
+        duration: float = 1.0,
+        speed: float = 0.005,
     ) -> None:
         """クラスの初期化メソッド。
 
@@ -54,6 +56,8 @@ class OakdYoloStar(OakdTrackingYolo):
             show_spatial_frame (bool, optional): 3次元フレームを表示するかどうか。デフォルトはFalse。
             show_orbit (bool, optional): 3次元軌道を表示するかどうか。デフォルトはFalse。
             log_path (Optional[str], optional): 物体の軌道履歴を保存するパス。show_orbitがTrueの時のみ有効。
+            duration (float, optional): ログのplot追加の時間スケール。デフォルトは1.0。
+            speed (float, optional): ログのplot移動速度の倍率。デフォルトは0.005。
 
         """
         self.BIRD_FRAME_BACKGROUND_IMAGE = (
@@ -86,6 +90,8 @@ class OakdYoloStar(OakdTrackingYolo):
             oakd_yolo_star=self,
             log_path=log_file_path,
             start_time=self.start_time,
+            duration=duration,
+            speed=speed,
             interval=self.orbit_data_list.LOGGING_INTEREVAL,
         )
         self.z_offset = 0

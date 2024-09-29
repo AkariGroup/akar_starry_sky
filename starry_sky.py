@@ -33,6 +33,18 @@ def main() -> None:
         type=str,
         default="log/"
     )
+    parser.add_argument(
+        "--duration",
+        help="Duration of the orbit log play",
+        type=int,
+        default=1
+    )
+    parser.add_argument(
+        "--speed",
+        help="Speed of the orbit log movement",
+        type=int,
+        default=0.005
+    )
     args = parser.parse_args()
     bird_frame = True
     model_path = "model/human_parts.blob"
@@ -58,6 +70,8 @@ def main() -> None:
             show_spatial_frame=False,
             show_orbit=True,
             log_path=args.log_path,
+            duration=args.duration
+            speed=args.speed
         )
         # 最大表示左右距離を指定[mm]。10000を指定すると、左端から右端が10000mmになる。
         oakd_yolo_star.update_bird_frame_width(10000)
