@@ -313,8 +313,8 @@ class LogPlayer(OrbitPlayer):
         oakd_yolo_star: OakdYoloStar,
         log_path: str,
         start_time: int = 0,
-        duration: float = 60.0,
-        speed: float = 0.01,
+        duration: float = 1.0,
+        speed: float = 0.005,
         fov: float = 73.0,
         max_z: float = 15000,
         interval: float = 0.5,
@@ -327,7 +327,7 @@ class LogPlayer(OrbitPlayer):
             log_path (str): ログファイルのパス。
             start_time (int, optional): ログの再生開始時間。デフォルトは0。
             duration (float, optional): ログのplot追加の時間スケール。デフォルトは1.0。
-            speed (float, optional): 再生速度。デフォルトは1.0。
+            speed (float, optional): 再生速度。デフォルトは0.005。
             fov (float, optional): 俯瞰マップ上に描画されるOAK-Dの視野角 (度). デフォルトは 73.0 度。
             max_z (float, optional): 俯瞰マップの最大Z座標値. デフォルトは 15000。
             interval (float, optional): ログの時間間隔。デフォルトは 0.5。
