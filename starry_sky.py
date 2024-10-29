@@ -70,7 +70,7 @@ def main() -> None:
             show_spatial_frame=False,
             show_orbit=True,
             log_path=args.log_path,
-            duration=args.duration
+            duration=args.duration,
             speed=args.speed
         )
         # 最大表示左右距離を指定[mm]。10000を指定すると、左端から右端が10000mmになる。
